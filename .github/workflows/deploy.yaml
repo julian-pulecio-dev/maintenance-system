@@ -35,7 +35,7 @@ jobs:
       # ---------- BUILD & PUSH ----------
       - name: Build and push image
         run: |
-          IMAGE=${{ secrets.DOCKERHUB_USER }}/semantic-search:latest
+          IMAGE=${{ secrets.DOCKERHUB_USER }}/maintenance-system:latest
           docker build -t $IMAGE .
           docker push $IMAGE
 
