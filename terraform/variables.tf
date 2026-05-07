@@ -28,32 +28,13 @@ variable "cors_allowed_origins" {
   default     = ["*"]
 }
 
-variable "email_host" {
-  description = "SMTP host for sending emails"
+variable "email_backend" {
+  description = "Email backend to use for sending emails"
   type        = string
-}
-
-variable "email_port" {
-  description = "SMTP port for sending emails"
-  type        = number
-}
-
-variable "email_host_user" {
-  description = "SMTP username for sending emails"
-  type        = string
-}
-
-variable "email_host_password" {
-  description = "SMTP password for sending emails"
-  type        = string
+  default     = "django_ses.SESBackend"
 }
 
 variable "email_default_from" {
-  description = "Default 'from' email address for outgoing emails"
-  type        = string
-}
-
-variable "email_backend" {
-  description = "Email backend to use for sending emails"
+  description = "Default 'from' address for outgoing emails (must be verified in SES)"
   type        = string
 }

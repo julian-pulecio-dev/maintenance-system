@@ -15,14 +15,13 @@ module "ecs_task_definition" {
   source = "./task"
   iam_role_arn = module.iam_role.arn
   environment_variables = [
-    { name = "DB_HOST",        value = var.db_host },
-    { name = "DB_NAME",        value = var.db_name },
-    { name = "DB_PORT",        value = var.db_port },
-    { name = "EMAIL_HOST",     value = var.email_host },
-    { name = "EMAIL_PORT",     value = var.email_port },
-    { name = "EMAIL_HOST_USER", value = var.email_host_user },
-    { name = "EMAIL_DEFAULT_FROM", value = var.email_default_from },
-    { name = "EMAIL_BACKEND", value = var.email_backend }
+    { name = "DB_HOST",            value = var.db_host },
+    { name = "DB_NAME",            value = var.db_name },
+    { name = "DB_PORT",            value = var.db_port },
+    { name = "DJANGO_SETTINGS_MODULE", value = "app.settings.base" },
+    { name = "EMAIL_BACKEND",          value = var.email_backend },
+    { name = "DEFAULT_FROM_EMAIL",     value = var.email_default_from },
+    { name = "AWS_SES_REGION_NAME",    value = var.ses_region }
   ]
   secret_variables = [
     { name = "DB_USER",     valueFrom = var.db_user_secret_arn },
@@ -36,14 +35,13 @@ module "ecs_task_definition_migrate" {
   source = "./task"
   iam_role_arn = module.iam_role.arn
   environment_variables = [
-    { name = "DB_HOST",        value = var.db_host },
-    { name = "DB_NAME",        value = var.db_name },
-    { name = "DB_PORT",        value = var.db_port },
-    { name = "EMAIL_HOST",     value = var.email_host },
-    { name = "EMAIL_PORT",     value = var.email_port },
-    { name = "EMAIL_HOST_USER", value = var.email_host_user },
-    { name = "EMAIL_DEFAULT_FROM", value = var.email_default_from },
-    { name = "EMAIL_BACKEND", value = var.email_backend }
+    { name = "DB_HOST",            value = var.db_host },
+    { name = "DB_NAME",            value = var.db_name },
+    { name = "DB_PORT",            value = var.db_port },
+    { name = "DJANGO_SETTINGS_MODULE", value = "app.settings.base" },
+    { name = "EMAIL_BACKEND",          value = var.email_backend },
+    { name = "DEFAULT_FROM_EMAIL",     value = var.email_default_from },
+    { name = "AWS_SES_REGION_NAME",    value = var.ses_region }
   ]
   secret_variables = [
     { name = "DB_USER",     valueFrom = var.db_user_secret_arn },

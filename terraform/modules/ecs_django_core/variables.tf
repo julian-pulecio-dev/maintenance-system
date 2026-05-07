@@ -70,23 +70,8 @@ variable "requests_per_target" {
   default     = 1000
 }
 
-variable "email_host" {
-  description = "SMTP host for sending emails"
-  type        = string
-}
-
-variable "email_port" {
-  description = "SMTP port for sending emails"
-  type        = number
-}
-
-variable "email_host_user" {
-  description = "SMTP username for sending emails"
-  type        = string
-}
-
-variable "email_host_password" {
-  description = "SMTP password for sending emails"
+variable "email_backend" {
+  description = "Email backend to use for sending emails"
   type        = string
 }
 
@@ -95,7 +80,8 @@ variable "email_default_from" {
   type        = string
 }
 
-variable "email_backend" {
-  description = "Email backend to use for sending emails"
+variable "ses_region" {
+  description = "AWS region for SES"
   type        = string
+  default     = "us-east-1"
 }

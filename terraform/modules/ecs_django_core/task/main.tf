@@ -42,6 +42,24 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_attach" {
   policy_arn = aws_iam_policy.ecs_exec.arn
 }
 
+resource "aws_iam_policy" "ses_send" {
+  name = "${var.name}-ses-send"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail", "ses:SendRawEmail", "ses:GetSendQuota"]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ses_send_attach" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.ses_send.arn
+}
+
 resource "aws_ecs_task_definition" "app" {
   family                   = var.name
   network_mode             = "awsvpc"

@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import PasswordResetToken
-from .serializers import ForgotPasswordSerializer, MeSerializer, UserSerializer
+from .serializers import ForgotPasswordSerializer, MeSerializer, ResetPasswordSerializer, UserSerializer
 
 
 class BaseUserView:
@@ -65,5 +65,42 @@ class ForgotPasswordView(APIView):
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[email],
         )
+
+        return Response(status=status.HTTP_200_OK)
+
+
+class ResetPasswordView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(request=ResetPasswordSerializer, responses={200: None})
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        token_value = serializer.validated_data["token"]
+        password = serializer.validated_data["password"]
+
+        try:
+            reset_token = PasswordResetToken.objects.select_related("user").get(
+                token=token_value
+            )
+        except PasswordResetToken.DoesNotExist:
+            return Response(
+                {"detail": "Invalid token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not reset_token.is_valid():
+            return Response(
+                {"detail": "Token has expired or has already been used."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = reset_token.user
+        user.set_password(password)
+        user.save()
+
+        reset_token.is_used = True
+        reset_token.save()
 
         return Response(status=status.HTTP_200_OK)
