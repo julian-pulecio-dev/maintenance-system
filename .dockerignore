@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtualenv
+.env
+.venv
+venv/
+
+# Logs
+*.log
+
+# DB
+*.sqlite3
+*.db
+
+# Tests / docs
+tests/
+docs/
+
+# Node (si existe)
+node_modules/
+
+# OS
+.DS_Store
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Django (MUY importante)
+media/
+staticfiles/
+
+# Otros posibles gigantes
+*.zip
+*.tar
+*.gz
+*.pdf
