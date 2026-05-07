@@ -1,0 +1,41 @@
+services:
+  app:
+    platform: linux/amd64
+    build:
+      context: .
+      args:
+        - DEV=true
+    environment:
+      DB_NAME: app
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: app-db
+      DB_PORT: 5432
+      EMAIL_HOST: mailhog
+      EMAIL_PORT: 1025
+      EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+      EMAIL_HOST_USER: user@example.com
+      EMAIL_HOST_PASSWORD: s3cret
+      DEFAULT_FROM_EMAIL: user@example.com    
+    volumes:
+      - ./app:/app
+    depends_on:
+      app-db:
+        condition: service_healthy
+
+  app-db:
+    image: postgres:15
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
