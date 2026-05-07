@@ -7,7 +7,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import PasswordResetToken
-from .serializers import ForgotPasswordSerializer, MeSerializer, ResetPasswordSerializer, UserSerializer
+from .serializers import (
+    ForgotPasswordSerializer,
+    MeSerializer,
+    ResetPasswordSerializer,
+    UserSerializer,
+)
 
 
 class BaseUserView:
@@ -24,9 +29,9 @@ class CreateUserView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
 
-class MeView(BaseUserView, generics.RetrieveUpdateAPIView):
+class MeView(BaseUserView, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MeSerializer
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
 
 class ListUsersView(BaseUserView, generics.ListAPIView):
@@ -81,9 +86,9 @@ class ResetPasswordView(APIView):
         password = serializer.validated_data["password"]
 
         try:
-            reset_token = PasswordResetToken.objects.select_related("user").get(
-                token=token_value
-            )
+            reset_token = PasswordResetToken.objects.select_related(
+                "user"
+            ).get(token=token_value)
         except PasswordResetToken.DoesNotExist:
             return Response(
                 {"detail": "Invalid token."},

@@ -3,9 +3,15 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from tenant.models import Tenant
+
 CREATE_USER_URL = reverse("user:create")
 ME_USER_URL = reverse("user:me")
 LIST_USERS_URL = reverse("user:list")
+
+
+def create_tenant(name="Test Tenant"):
+    return Tenant.objects.create(name=name)
 
 
 def create_user(**params):
@@ -19,19 +25,32 @@ def create_superuser(**params):
 class UnAuthenticatedUserApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.tenant = create_tenant()
 
     def test_create_user_success(self):
         payload = {
             "email": "test@example.com",
             "password": "testpass123",
             "name": "Test User",
+            "tenant": str(self.tenant.id),
         }
         res = self.client.post(CREATE_USER_URL, payload)
         self.assertEqual(res.status_code, 201)
         user = get_user_model().objects.get(email=payload["email"])
         self.assertTrue(user.check_password(payload["password"]))
         self.assertEqual(user.name, payload["name"])
+        self.assertEqual(user.tenant, self.tenant)
         self.assertNotIn("password", res.data)
+
+    def test_create_user_without_tenant_fails(self):
+        payload = {
+            "email": "test@example.com",
+            "password": "testpass123",
+            "name": "Test User",
+        }
+        res = self.client.post(CREATE_USER_URL, payload)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("tenant", res.data)
 
     def test_user_with_email_exists_error(self):
         payload = {
@@ -40,7 +59,9 @@ class UnAuthenticatedUserApiTests(TestCase):
             "name": "Test User",
         }
         create_user(**payload)
-        res = self.client.post(CREATE_USER_URL, payload)
+        res = self.client.post(
+            CREATE_USER_URL, {**payload, "tenant": str(self.tenant.id)}
+        )
         self.assertEqual(res.status_code, 400)
         self.assertIn("email", res.data)
 
@@ -49,6 +70,7 @@ class UnAuthenticatedUserApiTests(TestCase):
             "email": "test@example.com",
             "password": "pw",
             "name": "Test User",
+            "tenant": str(self.tenant.id),
         }
         res = self.client.post(CREATE_USER_URL, payload)
         self.assertEqual(res.status_code, 400)
@@ -61,20 +83,24 @@ class UnAuthenticatedUserApiTests(TestCase):
 
 class AuthenticatedUserApiTests(TestCase):
     def setUp(self):
+        self.tenant = create_tenant()
         self.user = create_user(
             email="test@example.com",
             password="testpass123",
             name="Test User",
+            tenant=self.tenant,
         )
         self.other_user = create_user(
             email="other@example.com",
             password="otherpass123",
             name="Other User",
+            tenant=self.tenant,
         )
         self.superuser = create_superuser(
             email="superuser@example.com",
             password="superpass123",
             name="Super User",
+            tenant=self.tenant,
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)

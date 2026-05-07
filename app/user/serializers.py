@@ -11,7 +11,10 @@ class UserSerializer(serializers.ModelSerializer):
         model = get_user_model()
         fields = ("email", "password", "name", "tenant")
         read_only_fields = ["id"]
-        extra_kwargs = {"password": {"write_only": True, "min_length": 5}}
+        extra_kwargs = {
+            "password": {"write_only": True, "min_length": 5},
+            "tenant": {"required": True, "allow_null": False},
+        }
 
     def create(self, validated_data):
         """Create a new user with encrypted password and return it."""
@@ -21,7 +24,8 @@ class UserSerializer(serializers.ModelSerializer):
 class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = get_user_model()
-        fields = ("name",)
+        fields = ("email", "name", "tenant")
+        read_only_fields = ("email", "tenant")
 
 
 class ForgotPasswordSerializer(serializers.Serializer):

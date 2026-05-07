@@ -1,5 +1,11 @@
 from django.urls import path
-from .views import CreateUserView, ForgotPasswordView, ListUsersView, MeView, ResetPasswordView
+from .views import (
+    CreateUserView,
+    ForgotPasswordView,
+    ListUsersView,
+    MeView,
+    ResetPasswordView,
+)
 
 app_name = "user"
 

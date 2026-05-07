@@ -36,7 +36,12 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant = models.ForeignKey("tenant.Tenant", on_delete=models.PROTECT, null=True, related_name="users")
+    tenant = models.ForeignKey(
+        "tenant.Tenant",
+        on_delete=models.PROTECT,
+        null=True,
+        related_name="users",
+    )
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)

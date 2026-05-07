@@ -43,3 +43,6 @@ jobs:
 
       - name: Run tests
         run: docker compose -p ci -f docker-compose.ci.yml exec -T app python manage.py test --settings=app.settings.test
+
+      - name: Run linter
+        run: docker compose -p ci -f docker-compose.ci.yml exec -T app flake8
