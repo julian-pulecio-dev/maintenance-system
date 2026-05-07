@@ -1,11 +1,5 @@
 from django.urls import path
-from .views import (
-    CreateUserView,
-    MeView,
-    ListUsersView,
-    ForgotPasswordView,
-    ResetPasswordView,
-)
+from .views import CreateUserView, ForgotPasswordView, ListUsersView, MeView
 
 app_name = "user"
 
@@ -17,8 +11,5 @@ urlpatterns = [
         "forgot-password/",
         ForgotPasswordView.as_view(),
         name="forgot-password",
-    ),
-    path(
-        "reset-password/", ResetPasswordView.as_view(), name="reset-password"
     ),
 ]
