@@ -5,6 +5,8 @@ services:
       context: .
       args:
         - DEV=true
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     volumes:
@@ -17,6 +19,8 @@ services:
 
   app-db:
     image: postgres:15
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
