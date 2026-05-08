@@ -11,3 +11,4 @@ variable "db_user_secret_arn" {
   description = "ARN of the Secrets Manager secret holding the DB username"
   type        = string
 }
+

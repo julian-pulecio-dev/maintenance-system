@@ -21,13 +21,13 @@ module "vpc" {
 }
 
 module "rds" {
-  source                 = "./modules/rds"
-  vpc_id                 = module.vpc.vpc_id
+  source                     = "./modules/rds"
+  vpc_id                     = module.vpc.vpc_id
   allowed_security_group_ids = [module.vpc.security_group_id]
-  db_name                = var.db_name
-  db_user                = data.aws_secretsmanager_secret_version.db_user.secret_string
-  db_password            = data.aws_secretsmanager_secret_version.db_password.secret_string
-  subnet_group_name      = module.vpc.subnet_group_name
+  db_name                    = var.db_name
+  db_user                    = data.aws_secretsmanager_secret_version.db_user.secret_string
+  db_password                = data.aws_secretsmanager_secret_version.db_password.secret_string
+  subnet_group_name          = module.vpc.subnet_group_name
 }
 
 module "ecs_django_core" {

@@ -65,11 +65,19 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 
 class TenantAwareTokenSerializer(TokenObtainPairSerializer):
+    tenant = serializers.PrimaryKeyRelatedField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+
     def validate(self, attrs):
         user = authenticate(
             request=self.context.get("request"),
             username=attrs[self.username_field],
             password=attrs["password"],
+            tenant=attrs.get("tenant"),
         )
 
         if not user:
