@@ -200,7 +200,7 @@ class OutboxEvent(models.Model):
         self.retry_count += 1
 
         self.error_message = (
-            error_message[:self.MAX_ERROR_MESSAGE_LENGTH]
+            error_message[: self.MAX_ERROR_MESSAGE_LENGTH]
             if error_message
             else None
         )
@@ -234,8 +234,4 @@ class OutboxEvent(models.Model):
         )
 
     def __str__(self):
-        return (
-            f"[{self.tenant_id}] "
-            f"{self.event_type} "
-            f"({self.status})"
-        )
+        return f"[{self.tenant_id}] " f"{self.event_type} " f"({self.status})"

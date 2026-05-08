@@ -29,7 +29,10 @@ class Migration(migrations.Migration):
                 (
                     "token",
                     models.UUIDField(
-                        db_index=True, default=uuid.uuid4, editable=False, unique=True
+                        db_index=True,
+                        default=uuid.uuid4,
+                        editable=False,
+                        unique=True,
                     ),
                 ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
@@ -55,7 +58,9 @@ class Migration(migrations.Migration):
             model_name="user",
             constraint=models.CheckConstraint(
                 check=models.Q(
-                    ("tenant__isnull", False), ("is_superuser", True), _connector="OR"
+                    ("tenant__isnull", False),
+                    ("is_superuser", True),
+                    _connector="OR",
                 ),
                 name="tenant_required_for_non_superusers",
             ),

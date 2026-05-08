@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from tenant.permissions import TenantHeaderRequired
 from .models import Asset
 from .serializers import AssetSerializer
 
@@ -11,23 +12,23 @@ from .serializers import AssetSerializer
 class AssetListCreateView(generics.ListCreateAPIView):
     serializer_class = AssetSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
 
     def get_queryset(self):
-        return Asset.objects.for_tenant(self.request.user.tenant).not_deleted()
+        return Asset.objects.for_tenant(self.request.tenant).not_deleted()
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.user.tenant)
+        serializer.save(tenant=self.request.tenant)
 
 
 class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AssetSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return Asset.objects.for_tenant(self.request.user.tenant)
+        return Asset.objects.for_tenant(self.request.tenant)
 
     def destroy(self, request, *args, **kwargs):
         asset = self.get_object()
@@ -37,11 +38,11 @@ class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class AssetRestoreView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
 
     def post(self, request, pk):
         try:
-            asset = Asset.objects.for_tenant(request.user.tenant).get(pk=pk)
+            asset = Asset.objects.for_tenant(request.tenant).get(pk=pk)
         except Asset.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -55,7 +56,9 @@ class AssetRestoreView(APIView):
             asset.restore()
         except DjangoValidationError as exc:
             if hasattr(exc, "message_dict"):
-                return Response(exc.message_dict, status=status.HTTP_409_CONFLICT)
+                return Response(
+                    exc.message_dict, status=status.HTTP_409_CONFLICT
+                )
             return Response(
                 {"detail": exc.messages}, status=status.HTTP_409_CONFLICT
             )

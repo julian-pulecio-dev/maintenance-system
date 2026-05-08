@@ -32,9 +32,10 @@ class UnAuthenticatedUserApiTests(TestCase):
             "email": "test@example.com",
             "password": "testpass123",
             "name": "Test User",
-            "tenant": str(self.tenant.id),
         }
-        res = self.client.post(CREATE_USER_URL, payload)
+        res = self.client.post(
+            CREATE_USER_URL, payload, HTTP_X_TENANT_ID=str(self.tenant.id)
+        )
         self.assertEqual(res.status_code, 201)
         user = get_user_model().objects.get(email=payload["email"])
         self.assertTrue(user.check_password(payload["password"]))
@@ -42,25 +43,28 @@ class UnAuthenticatedUserApiTests(TestCase):
         self.assertEqual(user.tenant, self.tenant)
         self.assertNotIn("password", res.data)
 
-    def test_create_user_without_tenant_fails(self):
+    def test_create_user_without_tenant_header_fails(self):
         payload = {
             "email": "test@example.com",
             "password": "testpass123",
             "name": "Test User",
         }
         res = self.client.post(CREATE_USER_URL, payload)
-        self.assertEqual(res.status_code, 400)
-        self.assertIn("tenant", res.data)
+        self.assertEqual(res.status_code, 403)
 
     def test_user_with_email_exists_error(self):
+        create_user(
+            email="test@example.com",
+            password="testpass123",
+            tenant=self.tenant,
+        )
         payload = {
             "email": "test@example.com",
             "password": "testpass123",
             "name": "Test User",
         }
-        create_user(**payload)
         res = self.client.post(
-            CREATE_USER_URL, {**payload, "tenant": str(self.tenant.id)}
+            CREATE_USER_URL, payload, HTTP_X_TENANT_ID=str(self.tenant.id)
         )
         self.assertEqual(res.status_code, 400)
         self.assertIn("email", res.data)
@@ -70,9 +74,10 @@ class UnAuthenticatedUserApiTests(TestCase):
             "email": "test@example.com",
             "password": "pw",
             "name": "Test User",
-            "tenant": str(self.tenant.id),
         }
-        res = self.client.post(CREATE_USER_URL, payload)
+        res = self.client.post(
+            CREATE_USER_URL, payload, HTTP_X_TENANT_ID=str(self.tenant.id)
+        )
         self.assertEqual(res.status_code, 400)
         user_exists = (
             get_user_model().objects.filter(email=payload["email"]).exists()
@@ -100,7 +105,6 @@ class AuthenticatedUserApiTests(TestCase):
             email="superuser@example.com",
             password="superpass123",
             name="Super User",
-            tenant=self.tenant,
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
@@ -131,9 +135,7 @@ class AuthenticatedUserApiTests(TestCase):
         self.assertEqual(res.status_code, 403)
 
     def test_update_user_success(self):
-        payload = {
-            "name": "Updated Name",
-        }
+        payload = {"name": "Updated Name"}
         res = self.client.patch(ME_USER_URL, payload)
         self.assertEqual(res.status_code, 200)
         self.user.refresh_from_db()
@@ -141,10 +143,7 @@ class AuthenticatedUserApiTests(TestCase):
 
     def test_update_user_unauthenticated(self):
         self.client.force_authenticate(user=None)
-        payload = {
-            "name": "Updated Name",
-        }
-        res = self.client.patch(ME_USER_URL, payload)
+        res = self.client.patch(ME_USER_URL, {"name": "Updated Name"})
         self.assertEqual(res.status_code, 401)
 
     def test_delete_user_success(self):

@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
 class Command(BaseCommand):
     help = "Creates a global superuser with no tenant"
 
@@ -17,4 +18,6 @@ class Command(BaseCommand):
             password=options["password"],
             name=options["name"],
         )
-        self.stdout.write(self.style.SUCCESS(f"Superuser created: {user.email}"))
+        self.stdout.write(
+            self.style.SUCCESS(f"Superuser created: {user.email}")
+        )

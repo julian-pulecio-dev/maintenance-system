@@ -32,7 +32,10 @@ class TenantListCreateTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.admin = create_admin()
-        self.user = create_user(email="regular@example.com")
+        self.regular_tenant = create_tenant(name="Regular Tenant")
+        self.user = create_user(
+            email="regular@example.com", tenant=self.regular_tenant
+        )
 
     def test_list_tenants_as_admin(self):
         create_tenant("Tenant A")
@@ -42,7 +45,7 @@ class TenantListCreateTests(TestCase):
         res = self.client.get(TENANT_LIST_URL)
 
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(len(res.data), 2)
+        self.assertEqual(len(res.data), 3)
 
     def test_list_tenants_unauthenticated(self):
         res = self.client.get(TENANT_LIST_URL)
@@ -99,7 +102,10 @@ class TenantDetailTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.admin = create_admin()
-        self.user = create_user(email="regular@example.com")
+        self.regular_tenant = create_tenant(name="Regular Tenant")
+        self.user = create_user(
+            email="regular@example.com", tenant=self.regular_tenant
+        )
         self.tenant = create_tenant()
 
     def test_retrieve_tenant_as_admin(self):

@@ -14,16 +14,14 @@ class UserManager(BaseUserManager):
     def create_user(self, email, password=None, tenant=None, **extra_fields):
         if not email:
             raise ValueError("Email is required")
+        if not password:
+            raise ValueError("Password is required")
         if not tenant:
             raise ValueError("Tenant is required")
 
         email = self.normalize_email(email)
 
-        user = self.model(
-            email=email,
-            tenant=tenant,
-            **extra_fields
-        )
+        user = self.model(email=email, tenant=tenant, **extra_fields)
 
         if password:
             user.set_password(password)
@@ -34,6 +32,9 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError("Email is required")
+
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
@@ -62,7 +63,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
     )
 
-    email = models.EmailField()  # unique=True does not apply here, the constraint is per tenant
+    email = (
+        models.EmailField()
+    )  # unique=True does not apply here, the constraint is per tenant
 
     name = models.CharField(max_length=255, blank=True)
 
@@ -80,15 +83,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "email"],
-                name="unique_user_email_per_tenant"
+                fields=["tenant", "email"], name="unique_user_email_per_tenant"
             ),
             # Only superusers can have no tenant.
             # Regular users (is_superuser=False) must always have a tenant.
             models.CheckConstraint(
                 check=(
-                    models.Q(tenant__isnull=False) |
-                    models.Q(is_superuser=True)
+                    models.Q(tenant__isnull=False)
+                    | models.Q(is_superuser=True)
                 ),
                 name="tenant_required_for_non_superusers",
             ),
@@ -100,7 +102,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class PasswordResetToken(models.Model):
     # Configurable via settings; defaults to 1 hour.
-    TOKEN_EXPIRY_HOURS = getattr(settings, "PASSWORD_RESET_TOKEN_EXPIRY_HOURS", 1)
+    TOKEN_EXPIRY_HOURS = getattr(
+        settings, "PASSWORD_RESET_TOKEN_EXPIRY_HOURS", 1
+    )
 
     id = models.UUIDField(
         primary_key=True,

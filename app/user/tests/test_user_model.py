@@ -1,15 +1,19 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
+from tenant.models import Tenant
+
 
 class UserModelTest(TestCase):
     def setUp(self):
         self.user_model = get_user_model()
-        return
+        self.tenant = Tenant.objects.create(name="Test Tenant")
 
     def test_create_user_successfully(self):
         user = self.user_model.objects.create_user(
-            email="test_user@email.com", password="user_password123*"
+            email="test_user@email.com",
+            password="user_password123*",
+            tenant=self.tenant,
         )
         self.assertEqual(1, self.user_model.objects.count())
         self.assertEqual(user.email, "test_user@email.com")
@@ -36,5 +40,5 @@ class UserModelTest(TestCase):
     def test_create_user_without_password_raises_value_error(self):
         with self.assertRaisesMessage(ValueError, "Password is required"):
             self.user_model.objects.create_user(
-                email="test_user@email.com", password=""
+                email="test_user@email.com", password="", tenant=self.tenant
             )

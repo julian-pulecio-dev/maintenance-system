@@ -5,14 +5,18 @@ User = get_user_model()
 
 
 class TenantAwareBackend(BaseBackend):
-    def authenticate(self, request, username=None, password=None, tenant=None, **kwargs):
+    def authenticate(
+        self, request, username=None, password=None, tenant=None, **kwargs
+    ):
         if username is None or password is None:
             return None
 
         try:
             if tenant is None:
                 # Superusers have no tenant
-                user = User.objects.get(email=username, tenant__isnull=True, is_superuser=True)
+                user = User.objects.get(
+                    email=username, tenant__isnull=True, is_superuser=True
+                )
             else:
                 user = User.objects.get(email=username, tenant=tenant)
         except User.DoesNotExist:

@@ -1,8 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from asset_type.models import AssetType
-
 from .models import Asset
 
 
@@ -44,7 +42,7 @@ class AssetSerializer(serializers.ModelSerializer):
         return obj.is_deleted
 
     def validate_asset_type(self, value):
-        tenant = self.context["request"].user.tenant
+        tenant = self.context["request"].tenant
         if value.tenant_id != tenant.id:
             raise serializers.ValidationError(
                 "Asset type does not belong to your tenant."
@@ -52,7 +50,7 @@ class AssetSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        tenant = self.context["request"].user.tenant
+        tenant = self.context["request"].tenant
         if self.instance:
             instance = self.instance
             for key, value in data.items():

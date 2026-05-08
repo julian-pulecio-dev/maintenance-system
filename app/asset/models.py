@@ -130,10 +130,20 @@ class Asset(models.Model):
         db_table = "assets"
 
         indexes = [
-            models.Index(fields=["tenant", "deleted_at"], name="idx_asset_tenant_deleted"),
-            models.Index(fields=["tenant", "status"], name="idx_asset_tenant_status"),
-            models.Index(fields=["tenant", "asset_type"], name="idx_asset_tenant_type"),
-            models.Index(fields=["tenant", "last_maintenance_date"], name="idx_asset_tenant_maintenance"),
+            models.Index(
+                fields=["tenant", "deleted_at"],
+                name="idx_asset_tenant_deleted",
+            ),
+            models.Index(
+                fields=["tenant", "status"], name="idx_asset_tenant_status"
+            ),
+            models.Index(
+                fields=["tenant", "asset_type"], name="idx_asset_tenant_type"
+            ),
+            models.Index(
+                fields=["tenant", "last_maintenance_date"],
+                name="idx_asset_tenant_maintenance",
+            ),
         ]
 
         constraints = [
@@ -141,7 +151,6 @@ class Asset(models.Model):
                 check=Q(recommended_maintenance_interval_days__gt=0),
                 name="chk_recommended_interval_positive",
             ),
-
             models.CheckConstraint(
                 check=(
                     Q(last_maintenance_date__isnull=True)
@@ -149,7 +158,6 @@ class Asset(models.Model):
                 ),
                 name="chk_last_maintenance_after_installation",
             ),
-
             models.UniqueConstraint(
                 fields=["tenant", "serial_number"],
                 condition=Q(
@@ -170,10 +178,14 @@ class Asset(models.Model):
         errors = {}
 
         if self.installation_date and self.installation_date > today:
-            errors["installation_date"] = "Installation date cannot be in the future."
+            errors["installation_date"] = (
+                "Installation date cannot be in the future."
+            )
 
         if self.last_maintenance_date and self.last_maintenance_date > today:
-            errors["last_maintenance_date"] = "Last maintenance date cannot be in the future."
+            errors["last_maintenance_date"] = (
+                "Last maintenance date cannot be in the future."
+            )
 
         if (
             self.installation_date
@@ -216,7 +228,6 @@ class Asset(models.Model):
         - application commands
         """
         super().save(*args, **kwargs)
-
 
     def calculate_next_maintenance_date(self):
         if (

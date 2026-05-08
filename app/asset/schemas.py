@@ -47,9 +47,9 @@ def validate_metadata_section(data, schema, *, required=True, path=""):
 
         if field not in data:
             if required:
-                raise ValidationError({
-                    "metadata": f"Missing required field: '{full_path}'."
-                })
+                raise ValidationError(
+                    {"metadata": f"Missing required field: '{full_path}'."}
+                )
             continue
 
         value = data[field]
@@ -57,11 +57,9 @@ def validate_metadata_section(data, schema, *, required=True, path=""):
         # Nested object
         if isinstance(expected, dict):
             if not isinstance(value, dict):
-                raise ValidationError({
-                    "metadata": (
-                        f"Field '{full_path}' must be an object."
-                    )
-                })
+                raise ValidationError(
+                    {"metadata": (f"Field '{full_path}' must be an object.")}
+                )
 
             validate_metadata_section(
                 value,
@@ -73,12 +71,14 @@ def validate_metadata_section(data, schema, *, required=True, path=""):
         # Primitive type
         else:
             if not isinstance(value, expected):
-                raise ValidationError({
-                    "metadata": (
-                        f"Field '{full_path}' must be "
-                        f"{expected.__name__}."
-                    )
-                })
+                raise ValidationError(
+                    {
+                        "metadata": (
+                            f"Field '{full_path}' must be "
+                            f"{expected.__name__}."
+                        )
+                    }
+                )
 
 
 def validate_asset_metadata(asset):
@@ -96,21 +96,19 @@ def validate_asset_metadata(asset):
     metadata = asset.metadata or {}
 
     if not isinstance(metadata, dict):
-        raise ValidationError({
-            "metadata": "Metadata must be a JSON object."
-        })
+        raise ValidationError({"metadata": "Metadata must be a JSON object."})
 
     spec_version = metadata.get("spec_version")
 
     if spec_version is None:
-        raise ValidationError({
-            "metadata": "Field 'spec_version' is required."
-        })
+        raise ValidationError(
+            {"metadata": "Field 'spec_version' is required."}
+        )
 
     if not isinstance(spec_version, int):
-        raise ValidationError({
-            "metadata": "'spec_version' must be an integer."
-        })
+        raise ValidationError(
+            {"metadata": "'spec_version' must be an integer."}
+        )
 
     asset_type_slug = getattr(asset.asset_type, "slug", None)
 
@@ -125,12 +123,14 @@ def validate_asset_metadata(asset):
     schema = type_schemas.get(spec_version)
 
     if not schema:
-        raise ValidationError({
-            "metadata": (
-                f"Unsupported spec_version={spec_version} "
-                f"for asset type '{asset_type_slug}'."
-            )
-        })
+        raise ValidationError(
+            {
+                "metadata": (
+                    f"Unsupported spec_version={spec_version} "
+                    f"for asset type '{asset_type_slug}'."
+                )
+            }
+        )
 
     validate_metadata_section(
         metadata,

@@ -36,12 +36,15 @@ class Migration(migrations.Migration):
                 (
                     "aggregate_type",
                     models.CharField(
-                        help_text="Domain entity type, e.g. work_order", max_length=100
+                        help_text="Domain entity type, e.g. work_order",
+                        max_length=100,
                     ),
                 ),
                 (
                     "aggregate_id",
-                    models.UUIDField(help_text="ID of the related aggregate/entity"),
+                    models.UUIDField(
+                        help_text="ID of the related aggregate/entity"
+                    ),
                 ),
                 (
                     "payload",
@@ -90,7 +93,10 @@ class Migration(migrations.Migration):
                 ("error_message", models.TextField(blank=True, null=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("processed_at", models.DateTimeField(blank=True, null=True)),
-                ("last_attempted_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "last_attempted_at",
+                    models.DateTimeField(blank=True, null=True),
+                ),
                 (
                     "tenant",
                     models.ForeignKey(
@@ -124,7 +130,8 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="outboxevent",
             index=models.Index(
-                fields=["tenant_id", "event_type"], name="idx_outbox_tenant_event_type"
+                fields=["tenant_id", "event_type"],
+                name="idx_outbox_tenant_event_type",
             ),
         ),
         migrations.AddIndex(

@@ -5,14 +5,22 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.views import TokenObtainPairView
 
+from tenant.permissions import TenantHeaderRequired
 from .models import PasswordResetToken
 from .serializers import (
     ForgotPasswordSerializer,
     MeSerializer,
     ResetPasswordSerializer,
+    TenantAwareTokenSerializer,
     UserSerializer,
 )
+
+
+@extend_schema(request=TenantAwareTokenSerializer)
+class TenantAwareTokenObtainPairView(TokenObtainPairView):
+    serializer_class = TenantAwareTokenSerializer
 
 
 class BaseUserView:
@@ -26,7 +34,10 @@ class BaseUserView:
 
 class CreateUserView(generics.CreateAPIView):
     serializer_class = UserSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.AllowAny, TenantHeaderRequired]
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
 
 
 class MeView(BaseUserView, generics.RetrieveUpdateDestroyAPIView):
@@ -50,7 +61,7 @@ class ForgotPasswordView(APIView):
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data["email"]
-        tenant = serializer.validated_data["tenant"]
+        tenant = request.tenant
 
         try:
             user = get_user_model().objects.get(email=email, tenant=tenant)
@@ -60,7 +71,8 @@ class ForgotPasswordView(APIView):
                 message=(
                     f"Use the following token to reset your password:\n\n"
                     f"{reset_token.token}\n\n"
-                    f"This token expires in {PasswordResetToken.TOKEN_EXPIRY_HOURS} hour(s)."
+                    f"This token expires in "
+                    f"{PasswordResetToken.TOKEN_EXPIRY_HOURS} hour(s)."
                 ),
                 from_email=None,
                 recipient_list=[user.email],
@@ -69,7 +81,12 @@ class ForgotPasswordView(APIView):
             pass
 
         return Response(
-            {"detail": "If an account with that email exists, a reset link has been sent."},
+            {
+                "detail": (
+                    "If an account with that email exists, "
+                    "a reset link has been sent."
+                )
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -78,6 +95,7 @@ class ResetPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 
+    @extend_schema(request=ResetPasswordSerializer)
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -55,7 +55,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("description", models.TextField(blank=True, null=True)),
-                ("last_maintenance_date", models.DateField(blank=True, null=True)),
+                (
+                    "last_maintenance_date",
+                    models.DateField(blank=True, null=True),
+                ),
                 (
                     "recommended_maintenance_interval_days",
                     models.PositiveIntegerField(),
@@ -88,7 +91,8 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="asset",
             index=models.Index(
-                fields=["tenant", "deleted_at"], name="idx_asset_tenant_deleted"
+                fields=["tenant", "deleted_at"],
+                name="idx_asset_tenant_deleted",
             ),
         ),
         migrations.AddIndex(
@@ -113,7 +117,9 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="asset",
             constraint=models.CheckConstraint(
-                check=models.Q(("recommended_maintenance_interval_days__gt", 0)),
+                check=models.Q(
+                    ("recommended_maintenance_interval_days__gt", 0)
+                ),
                 name="chk_recommended_interval_positive",
             ),
         ),
@@ -122,7 +128,10 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 check=models.Q(
                     ("last_maintenance_date__isnull", True),
-                    ("last_maintenance_date__gte", models.F("installation_date")),
+                    (
+                        "last_maintenance_date__gte",
+                        models.F("installation_date"),
+                    ),
                     _connector="OR",
                 ),
                 name="chk_last_maintenance_after_installation",
@@ -132,7 +141,8 @@ class Migration(migrations.Migration):
             model_name="asset",
             constraint=models.UniqueConstraint(
                 condition=models.Q(
-                    ("deleted_at__isnull", True), ("serial_number__isnull", False)
+                    ("deleted_at__isnull", True),
+                    ("serial_number__isnull", False),
                 ),
                 fields=("tenant", "serial_number"),
                 name="uq_tenant_active_serial_number",

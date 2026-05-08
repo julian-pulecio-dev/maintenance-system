@@ -31,57 +31,78 @@ class ForgotPasswordViewTestCase(TestCase):
 
     def test_returns_200_for_existing_email(self):
         response = self.client.post(
-            FORGOT_PASSWORD_URL, {"email": self.user.email}
+            FORGOT_PASSWORD_URL,
+            {"email": self.user.email},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
         )
-
         self.assertEqual(response.status_code, 200)
 
     def test_returns_200_for_nonexistent_email(self):
         response = self.client.post(
-            FORGOT_PASSWORD_URL, {"email": "nobody@example.com"}
+            FORGOT_PASSWORD_URL,
+            {"email": "nobody@example.com"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
         )
-
         self.assertEqual(response.status_code, 200)
 
     def test_creates_reset_token_for_existing_user(self):
-        self.client.post(FORGOT_PASSWORD_URL, {"email": self.user.email})
-
+        self.client.post(
+            FORGOT_PASSWORD_URL,
+            {"email": self.user.email},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
         self.assertTrue(
             PasswordResetToken.objects.filter(user=self.user).exists()
         )
 
     def test_does_not_create_token_for_nonexistent_email(self):
-        self.client.post(FORGOT_PASSWORD_URL, {"email": "nobody@example.com"})
-
+        self.client.post(
+            FORGOT_PASSWORD_URL,
+            {"email": "nobody@example.com"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
         self.assertEqual(PasswordResetToken.objects.count(), 0)
 
     def test_sends_email_to_user(self):
-        self.client.post(FORGOT_PASSWORD_URL, {"email": self.user.email})
-
+        self.client.post(
+            FORGOT_PASSWORD_URL,
+            {"email": self.user.email},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(self.user.email, mail.outbox[0].to)
 
     def test_email_contains_token(self):
-        self.client.post(FORGOT_PASSWORD_URL, {"email": self.user.email})
-
+        self.client.post(
+            FORGOT_PASSWORD_URL,
+            {"email": self.user.email},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
         token = PasswordResetToken.objects.get(user=self.user)
         self.assertIn(str(token.token), mail.outbox[0].body)
 
     def test_does_not_send_email_for_nonexistent_user(self):
-        self.client.post(FORGOT_PASSWORD_URL, {"email": "nobody@example.com"})
-
+        self.client.post(
+            FORGOT_PASSWORD_URL,
+            {"email": "nobody@example.com"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
         self.assertEqual(len(mail.outbox), 0)
 
     def test_returns_400_for_invalid_email_format(self):
         response = self.client.post(
-            FORGOT_PASSWORD_URL, {"email": "not-an-email"}
+            FORGOT_PASSWORD_URL,
+            {"email": "not-an-email"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
         )
-
         self.assertEqual(response.status_code, 400)
 
     def test_returns_400_when_email_missing(self):
-        response = self.client.post(FORGOT_PASSWORD_URL, {})
-
+        response = self.client.post(
+            FORGOT_PASSWORD_URL,
+            {},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
         self.assertEqual(response.status_code, 400)
 
 
@@ -101,7 +122,6 @@ class ResetPasswordViewTestCase(TestCase):
             RESET_PASSWORD_URL,
             {"token": str(self.reset_token.token), "password": "newpass123"},
         )
-
         self.assertEqual(response.status_code, 200)
 
     def test_password_is_updated(self):
@@ -110,7 +130,6 @@ class ResetPasswordViewTestCase(TestCase):
             RESET_PASSWORD_URL,
             {"token": str(self.reset_token.token), "password": new_password},
         )
-
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(new_password))
 
@@ -119,7 +138,6 @@ class ResetPasswordViewTestCase(TestCase):
             RESET_PASSWORD_URL,
             {"token": str(self.reset_token.token), "password": "newpass123"},
         )
-
         self.reset_token.refresh_from_db()
         self.assertTrue(self.reset_token.is_used)
 
@@ -129,15 +147,16 @@ class ResetPasswordViewTestCase(TestCase):
             RESET_PASSWORD_URL,
             {"token": str(self.reset_token.token), "password": "newpass123"},
         )
-
         self.assertEqual(response.status_code, 400)
 
     def test_returns_400_for_invalid_token(self):
         response = self.client.post(
             RESET_PASSWORD_URL,
-            {"token": "00000000-0000-0000-0000-000000000000", "password": "newpass123"},
+            {
+                "token": "00000000-0000-0000-0000-000000000000",
+                "password": "newpass123",
+            },
         )
-
         self.assertEqual(response.status_code, 400)
 
     def test_returns_400_when_password_too_short(self):
@@ -145,10 +164,10 @@ class ResetPasswordViewTestCase(TestCase):
             RESET_PASSWORD_URL,
             {"token": str(self.reset_token.token), "password": "abc"},
         )
-
         self.assertEqual(response.status_code, 400)
 
     def test_returns_400_when_token_missing(self):
-        response = self.client.post(RESET_PASSWORD_URL, {"password": "newpass123"})
-
+        response = self.client.post(
+            RESET_PASSWORD_URL, {"password": "newpass123"}
+        )
         self.assertEqual(response.status_code, 400)

@@ -3,7 +3,6 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 
-from tenant.models import Tenant
 from .models import PasswordResetToken
 
 User = get_user_model()
@@ -13,15 +12,19 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("id", "email", "password", "name", "tenant")
-        read_only_fields = ("id",)
+        read_only_fields = ("id", "tenant")
         extra_kwargs = {
             "password": {"write_only": True, "min_length": 5},
-            "tenant": {"required": True, "allow_null": False},
         }
 
     def validate(self, attrs):
-        if User.objects.filter(tenant=attrs.get("tenant"), email=attrs.get("email")).exists():
-            raise serializers.ValidationError({"email": "A user with this email already exists."})
+        tenant = self.context["request"].tenant
+        if User.objects.filter(
+            tenant=tenant, email=attrs.get("email")
+        ).exists():
+            raise serializers.ValidationError(
+                {"email": "A user with this email already exists."}
+            )
         return attrs
 
     def create(self, validated_data):
@@ -31,13 +34,27 @@ class UserSerializer(serializers.ModelSerializer):
 class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "email", "name", "tenant", "is_active", "created_at", "updated_at")
-        read_only_fields = ("id", "email", "tenant", "is_active", "created_at", "updated_at")
+        fields = (
+            "id",
+            "email",
+            "name",
+            "tenant",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "email",
+            "tenant",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
 
 
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    tenant = serializers.PrimaryKeyRelatedField(queryset=Tenant.objects.all())
 
 
 class ResetPasswordSerializer(serializers.Serializer):
@@ -46,7 +63,9 @@ class ResetPasswordSerializer(serializers.Serializer):
 
     def validate_token(self, value):
         try:
-            reset_token = PasswordResetToken.objects.select_related("user").get(token=value)
+            reset_token = PasswordResetToken.objects.select_related(
+                "user"
+            ).get(token=value)
         except PasswordResetToken.DoesNotExist:
             raise serializers.ValidationError("Invalid or expired token.")
 
@@ -65,19 +84,13 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 
 class TenantAwareTokenSerializer(TokenObtainPairSerializer):
-    tenant = serializers.PrimaryKeyRelatedField(
-        queryset=Tenant.objects.all(),
-        required=False,
-        allow_null=True,
-        default=None,
-    )
-
     def validate(self, attrs):
+        request = self.context.get("request")
         user = authenticate(
-            request=self.context.get("request"),
+            request=request,
             username=attrs[self.username_field],
             password=attrs["password"],
-            tenant=attrs.get("tenant"),
+            tenant=getattr(request, "tenant", None),
         )
 
         if not user:

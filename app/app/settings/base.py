@@ -57,6 +57,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "tenant.middleware.TenantMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -176,4 +177,14 @@ AUTH_USER_MODEL = "user.User"
 
 SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "TenantID": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Tenant-ID",
+            }
+        }
+    },
+    "SECURITY": [{"TenantID": []}],
 }
