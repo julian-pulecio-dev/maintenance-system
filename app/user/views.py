@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from drf_spectacular.utils import extend_schema
@@ -6,6 +5,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from .models import PasswordResetToken
 from .serializers import (
     ForgotPasswordSerializer,
@@ -42,70 +42,47 @@ class ListUsersView(BaseUserView, generics.ListAPIView):
 
 class ForgotPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
-    @extend_schema(request=ForgotPasswordSerializer, responses={200: None})
+    @extend_schema(request=ForgotPasswordSerializer)
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data["email"]
-        user_model = get_user_model()
+        tenant = serializer.validated_data["tenant"]
 
         try:
-            user = user_model.objects.get(email=email)
-        except user_model.DoesNotExist:
-            return Response(status=status.HTTP_200_OK)
+            user = get_user_model().objects.get(email=email, tenant=tenant)
+            reset_token = PasswordResetToken.objects.create(user=user)
+            send_mail(
+                subject="Password reset request",
+                message=(
+                    f"Use the following token to reset your password:\n\n"
+                    f"{reset_token.token}\n\n"
+                    f"This token expires in {PasswordResetToken.TOKEN_EXPIRY_HOURS} hour(s)."
+                ),
+                from_email=None,
+                recipient_list=[user.email],
+            )
+        except get_user_model().DoesNotExist:
+            pass
 
-        reset_token = PasswordResetToken.objects.create(user=user)
-
-        send_mail(
-            subject="Password Reset Request",
-            message=(
-                f"You requested a password reset.\n\n"
-                f"Use the following token to reset your password:\n\n"
-                f"{reset_token.token}\n\n"
-                f"Token expires in {PasswordResetToken.TOKEN_EXPIRY_HOURS} hour(s).\n\n"
-                f"If you did not request this, please ignore this email."
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
+        return Response(
+            {"detail": "If an account with that email exists, a reset link has been sent."},
+            status=status.HTTP_200_OK,
         )
-
-        return Response(status=status.HTTP_200_OK)
 
 
 class ResetPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
-    @extend_schema(request=ResetPasswordSerializer, responses={200: None})
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        token_value = serializer.validated_data["token"]
-        password = serializer.validated_data["password"]
-
-        try:
-            reset_token = PasswordResetToken.objects.select_related(
-                "user"
-            ).get(token=token_value)
-        except PasswordResetToken.DoesNotExist:
-            return Response(
-                {"detail": "Invalid token."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not reset_token.is_valid():
-            return Response(
-                {"detail": "Token has expired or has already been used."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        user = reset_token.user
-        user.set_password(password)
-        user.save()
-
-        reset_token.is_used = True
-        reset_token.save()
-
-        return Response(status=status.HTTP_200_OK)
+        serializer.save()
+        return Response(
+            {"detail": "Password has been reset successfully."},
+            status=status.HTTP_200_OK,
+        )

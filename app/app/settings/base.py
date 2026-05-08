@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     "user",
     "tenant",
     "outbox",
+    "asset",
+    "asset_type",
 ]
 
 MIDDLEWARE = [
@@ -112,6 +114,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTHENTICATION_BACKENDS = [
+    "user.auth.backends.TenantAwareBackend",
+]
+
+SIMPLE_JWT = {
+    "TOKEN_OBTAIN_SERIALIZER": "user.serializers.TenantAwareTokenSerializer",
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/

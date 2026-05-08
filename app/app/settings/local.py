@@ -1,6 +1,8 @@
 from .base import *
 import os
 
+CORS_ALLOW_ALL_ORIGINS = True
+
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
 )
