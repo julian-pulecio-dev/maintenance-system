@@ -6,3 +6,4 @@ djangorestframework-simplejwt>=5.2,<5.3
 boto3>=1.42.47,<1.43
 django-ses>=4.0,<5.0
 django-cors-headers>=4.3.0,<5.0
+setuptools==81.0.0

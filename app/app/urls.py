@@ -28,6 +28,8 @@ from rest_framework_simplejwt.views import (
 )
 from user import urls as user_urls
 from tenant import urls as tenant_urls
+from asset import urls as asset_urls
+from asset_type import urls as asset_type_urls
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -51,4 +53,6 @@ urlpatterns = [
     path("api/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
     path("api/user/", include(user_urls)),
     path("api/tenant/", include(tenant_urls)),
+    path("api/asset/", include(asset_urls)),
+    path("api/asset-type/", include(asset_type_urls)),
 ]
