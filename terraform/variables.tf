@@ -38,3 +38,9 @@ variable "email_default_from" {
   description = "Default 'from' address for outgoing emails (must be verified in SES)"
   type        = string
 }
+
+variable "outbox_observer_schedule" {
+  description = "EventBridge Scheduler expression for the outbox observer Lambda. Examples: 'rate(5 minutes)', 'rate(1 hour)', 'cron(0/10 * * * ? *)'"
+  type        = string
+  default     = "rate(5 minutes)"
+}
