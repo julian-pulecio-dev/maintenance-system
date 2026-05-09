@@ -1,3 +1,11 @@
+locals {
+  env_vars = merge(
+    var.environment_variables,
+    var.sqs_results_queue_url != null ? { SQS_RESULTS_URL = var.sqs_results_queue_url } : {},
+    var.ses_from_email != null ? { SES_FROM_EMAIL = var.ses_from_email } : {},
+  )
+}
+
 data "archive_file" "lambda" {
   type        = "zip"
   source_dir  = var.source_dir
@@ -55,9 +63,11 @@ resource "aws_sns_topic_subscription" "this" {
 }
 
 module "iam_role" {
-  source        = "./iam_role"
-  name          = var.name
-  sqs_queue_arn = aws_sqs_queue.main.arn
+  source                = "./iam_role"
+  name                  = var.name
+  sqs_queue_arn         = aws_sqs_queue.main.arn
+  sqs_results_queue_arn = var.sqs_results_queue_arn
+  ses_enabled           = var.ses_from_email != null
 }
 
 resource "aws_lambda_function" "this" {
@@ -70,9 +80,9 @@ resource "aws_lambda_function" "this" {
   timeout       = var.lambda_timeout
 
   dynamic "environment" {
-    for_each = length(var.environment_variables) > 0 ? [1] : []
+    for_each = length(local.env_vars) > 0 ? [1] : []
     content {
-      variables = var.environment_variables
+      variables = local.env_vars
     }
   }
 }

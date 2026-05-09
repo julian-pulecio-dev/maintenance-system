@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import time
 from datetime import timedelta
 from threading import Thread, Event
 
@@ -40,10 +39,14 @@ def _get_sqs_client():
 
 def recover_stuck_records():
     stuck_cutoff = timezone.now() - timedelta(minutes=STUCK_THRESHOLD_MINUTES)
-    stuck = OutboxEvent.objects.processing().filter(last_attempted_at__lt=stuck_cutoff)
+    stuck = OutboxEvent.objects.processing().filter(
+        last_attempted_at__lt=stuck_cutoff
+    )
     count = 0
     for event in stuck:
-        event.mark_failed(f"Recovered: stuck in PROCESSING for over {STUCK_THRESHOLD_MINUTES} minutes")
+        event.mark_failed(
+            f"Recovered: stuck in PROCESSING for over {STUCK_THRESHOLD_MINUTES} minutes"
+        )
         count += 1
     if count:
         logger.warning("Recovered %d stuck PROCESSING events", count)
@@ -52,18 +55,20 @@ def recover_stuck_records():
 def _publish(event: OutboxEvent):
     topic_arn = os.environ["SNS_TOPIC_ARN"]
 
-    body = json.dumps({
-        "id": str(event.id),
-        "event_type": event.event_type,
-        "aggregate_type": event.aggregate_type,
-        "aggregate_id": str(event.aggregate_id),
-        "tenant_id": str(event.tenant_id),
-        "payload": event.payload,
-        "event_version": event.event_version,
-        "source_service": event.source_service,
-        "idempotency_key": event.idempotency_key,
-        "created_at": event.created_at.isoformat(),
-    })
+    body = json.dumps(
+        {
+            "id": str(event.id),
+            "event_type": event.event_type,
+            "aggregate_type": event.aggregate_type,
+            "aggregate_id": str(event.aggregate_id),
+            "tenant_id": str(event.tenant_id),
+            "payload": event.payload,
+            "event_version": event.event_version,
+            "source_service": event.source_service,
+            "idempotency_key": event.idempotency_key,
+            "created_at": event.created_at.isoformat(),
+        }
+    )
 
     _get_sns_client().publish(
         TopicArn=topic_arn,
@@ -93,9 +98,9 @@ def _publish(event: OutboxEvent):
 def poll_and_publish():
     with transaction.atomic():
         events = list(
-            OutboxEvent.objects
-            .pending()
-            .select_for_update(skip_locked=True)[:BATCH_SIZE]
+            OutboxEvent.objects.pending().select_for_update(skip_locked=True)[
+                :BATCH_SIZE
+            ]
         )
         for event in events:
             event.mark_processing()
@@ -114,7 +119,9 @@ def poll_and_publish():
             logger.error("Failed to publish event %s: %s", event.id, exc)
 
     if published or failed:
-        logger.info("Poll cycle complete: published=%d failed=%d", published, failed)
+        logger.info(
+            "Poll cycle complete: published=%d failed=%d", published, failed
+        )
 
 
 def process_results():
@@ -146,10 +153,16 @@ def process_results():
                 event.mark_failed(error or "Unknown error reported by worker")
 
         except OutboxEvent.DoesNotExist:
-            logger.error("Result for unknown event_id=%s", body.get("event_id"))
+            logger.error(
+                "Result for unknown event_id=%s", body.get("event_id")
+            )
 
         except Exception as exc:
-            logger.error("Failed to process result for message=%s: %s", message["MessageId"], exc)
+            logger.error(
+                "Failed to process result for message=%s: %s",
+                message["MessageId"],
+                exc,
+            )
             continue
 
         try:
@@ -157,20 +170,31 @@ def process_results():
                 QueueUrl=queue_url,
                 ReceiptHandle=message["ReceiptHandle"],
             )
-            logger.info("Result processed event_id=%s status=%s", event_id, status)
+            logger.info(
+                "Result processed event_id=%s status=%s", event_id, status
+            )
         except Exception as exc:
-            logger.error("Failed to delete message=%s: %s", message["MessageId"], exc)
+            logger.error(
+                "Failed to delete message=%s: %s", message["MessageId"], exc
+            )
 
 
 class Command(BaseCommand):
-    help = "Polls the outbox table, publishes pending events, and processes worker results"
+    help = (
+        "Polls the outbox table, publishes pending events, "
+        "and processes worker results"
+    )
 
     def handle(self, *args, **_):
         self.stdout.write("Outbox worker started")
         stop_event = Event()
 
-        poller_thread = Thread(target=self._run_poller, args=(stop_event,), daemon=True)
-        results_thread = Thread(target=self._run_results_reader, args=(stop_event,), daemon=True)
+        poller_thread = Thread(
+            target=self._run_poller, args=(stop_event,), daemon=True
+        )
+        results_thread = Thread(
+            target=self._run_results_reader, args=(stop_event,), daemon=True
+        )
 
         poller_thread.start()
         results_thread.start()

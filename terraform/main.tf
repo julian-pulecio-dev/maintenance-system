@@ -73,9 +73,13 @@ module "ecs_django_core" {
 }
 
 module "email_notifier_worker" {
-  source = "./modules/sns_subscriber"
-  name   = "${var.name}-email-notifier-worker"
-  sns_topic_arn     = module.sns_outbox_observer.topic_arn
-  filter_event_types = ["asset.created"]
-  source_dir        = "${path.root}/../lambdas/email_notifier"
+  source             = "./modules/sns_subscriber"
+  name               = "${var.name}-email-notifier-worker"
+  sns_topic_arn      = module.sns_outbox_observer.topic_arn
+  filter_event_types = ["asset.created", "asset.updated", "asset.deleted"]
+  source_dir         = "${path.root}/../lambdas/asset_email_notifier"
+
+  sqs_results_queue_url = module.sqs_outbox_results.queue_url
+  sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  ses_from_email        = var.email_default_from
 }

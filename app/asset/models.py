@@ -18,6 +18,7 @@ from asset_type.models import AssetType
 from tenant.models import Tenant
 from user.models import User
 
+
 class AssetQuerySet(models.QuerySet):
 
     def for_tenant(self, tenant):
@@ -235,7 +236,9 @@ class Asset(models.Model):
         if hasattr(self.supervisor, "tenant"):
             if self.supervisor.tenant_id != self.tenant_id:
                 raise ValidationError(
-                    {"supervisor": "The supervisor must belong to the same tenant."}
+                    {
+                        "supervisor": "The supervisor must belong to the same tenant."
+                    }
                 )
 
     def mark_as_active(self):

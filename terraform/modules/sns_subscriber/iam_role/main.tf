@@ -33,3 +33,43 @@ resource "aws_iam_role_policy_attachment" "sqs_consume_attach" {
   role       = aws_iam_role.lambda.name
   policy_arn = aws_iam_policy.sqs_consume.arn
 }
+
+resource "aws_iam_policy" "sqs_results_publish" {
+  count = var.sqs_results_queue_arn != null ? 1 : 0
+  name  = "${var.name}-sqs-results-publish"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = [var.sqs_results_queue_arn]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "sqs_results_publish_attach" {
+  count      = var.sqs_results_queue_arn != null ? 1 : 0
+  role       = aws_iam_role.lambda.name
+  policy_arn = aws_iam_policy.sqs_results_publish[0].arn
+}
+
+resource "aws_iam_policy" "ses_send" {
+  count = var.ses_enabled ? 1 : 0
+  name  = "${var.name}-ses-send"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail"]
+      Resource = ["*"]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ses_send_attach" {
+  count      = var.ses_enabled ? 1 : 0
+  role       = aws_iam_role.lambda.name
+  policy_arn = aws_iam_policy.ses_send[0].arn
+}
