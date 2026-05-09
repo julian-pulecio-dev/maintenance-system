@@ -8,7 +8,11 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from tenant.permissions import TenantHeaderRequired
 from .models import Asset
 from .serializers import AssetSerializer
-from .services import AssetAlreadyDeletedException, AssetNotDeletedException, AssetService
+from .services import (
+    AssetAlreadyDeletedException,
+    AssetNotDeletedException,
+    AssetService,
+)
 
 User = get_user_model()
 
@@ -33,7 +37,9 @@ class AssetListCreateView(generics.ListCreateAPIView):
             )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(
-                exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+                exc.message_dict
+                if hasattr(exc, "message_dict")
+                else exc.messages
             )
         serializer.instance = asset
 
@@ -55,7 +61,9 @@ class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
             )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(
-                exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+                exc.message_dict
+                if hasattr(exc, "message_dict")
+                else exc.messages
             )
         serializer.instance = asset
 
@@ -106,7 +114,12 @@ class AssetSupervisorView(APIView):
     permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
 
     def _get_asset(self, request, pk):
-        return Asset.objects.for_tenant(request.tenant).not_deleted().filter(pk=pk).first()
+        return (
+            Asset.objects.for_tenant(request.tenant)
+            .not_deleted()
+            .filter(pk=pk)
+            .first()
+        )
 
     def post(self, request, pk):
         asset = self._get_asset(request, pk)
@@ -128,11 +141,20 @@ class AssetSupervisorView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if hasattr(supervisor, "tenant_id") and supervisor.tenant_id != request.tenant.id:
+        if (
+            hasattr(supervisor, "tenant_id")
+            and supervisor.tenant_id != request.tenant.id
+        ):
             return Response(
-                {"supervisor": "The supervisor must belong to the same tenant."},
+                {
+                    "supervisor": "The supervisor must belong to the same tenant."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        asset = AssetService.assign_supervisor(asset=asset, supervisor=supervisor)
-        return Response(AssetSerializer(asset, context={"request": request}).data)
+        asset = AssetService.assign_supervisor(
+            asset=asset, supervisor=supervisor
+        )
+        return Response(
+            AssetSerializer(asset, context={"request": request}).data
+        )

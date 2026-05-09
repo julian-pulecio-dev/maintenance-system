@@ -106,7 +106,11 @@ class AssetService:
             asset = Asset.objects.create(tenant=tenant, **validated_data)
         except IntegrityError:
             raise DjangoValidationError(
-                {"serial_number": "An active asset with this serial number already exists."}
+                {
+                    "serial_number": (
+                        "An active asset with this serial number already exists."
+                    )
+                }
             )
 
         _publish_event(
@@ -146,7 +150,11 @@ class AssetService:
             asset.save(update_fields=changed_fields)
         except IntegrityError:
             raise DjangoValidationError(
-                {"serial_number": "An active asset with this serial number already exists."}
+                {
+                    "serial_number": (
+                        "An active asset with this serial number already exists."
+                    )
+                }
             )
 
         _publish_event(

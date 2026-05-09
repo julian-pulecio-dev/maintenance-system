@@ -19,7 +19,10 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("asset", "0002_asset_supervisor_asset_idx_asset_tenant_supervisor_and_more"),
+        (
+            "asset",
+            "0002_asset_supervisor_asset_idx_asset_tenant_supervisor_and_more",
+        ),
     ]
 
     operations = [

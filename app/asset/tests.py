@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 
 from django.contrib.auth import get_user_model
@@ -35,6 +36,12 @@ def create_asset_type(tenant, name="Pump"):
 
 
 def create_asset(tenant, asset_type, **kwargs):
+    if "supervisor" not in kwargs:
+        kwargs["supervisor"] = get_user_model().objects.create_user(
+            tenant=tenant,
+            email=f"supervisor-{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
     defaults = {
         "name": "Main Pump",
         "location": "Building A",
@@ -43,7 +50,9 @@ def create_asset(tenant, asset_type, **kwargs):
         "metadata": {"spec_version": 1},
     }
     defaults.update(kwargs)
-    return Asset.objects.create(tenant=tenant, asset_type=asset_type, **defaults)
+    return Asset.objects.create(
+        tenant=tenant, asset_type=asset_type, **defaults
+    )
 
 
 class AssetListCreateTests(TestCase):
@@ -107,6 +116,7 @@ class AssetListCreateTests(TestCase):
         payload = {
             "name": "New Pump",
             "asset_type": str(self.asset_type.id),
+            "supervisor": str(self.user.id),
             "location": "Building B",
             "installation_date": "2021-06-01",
             "recommended_maintenance_interval_days": 60,
@@ -131,6 +141,7 @@ class AssetListCreateTests(TestCase):
         payload = {
             "name": "New Pump",
             "asset_type": str(other_asset_type.id),
+            "supervisor": str(self.user.id),
             "location": "Building B",
             "installation_date": "2021-06-01",
             "recommended_maintenance_interval_days": 60,
@@ -150,6 +161,7 @@ class AssetListCreateTests(TestCase):
         payload = {
             "name": "New Pump",
             "asset_type": str(self.asset_type.id),
+            "supervisor": str(self.user.id),
             "location": "Building B",
             "installation_date": "2021-06-01",
             "recommended_maintenance_interval_days": 60,
@@ -182,7 +194,9 @@ class AssetDetailTests(TestCase):
     def test_retrieve_other_tenant_asset_fails(self):
         other_tenant = create_tenant(name="Other Tenant")
         other_asset_type = create_asset_type(other_tenant, name="Motor")
-        other_asset = create_asset(other_tenant, other_asset_type, name="Motor X")
+        other_asset = create_asset(
+            other_tenant, other_asset_type, name="Motor X"
+        )
 
         res = self.client.get(
             asset_detail_url(other_asset.id),
@@ -251,7 +265,9 @@ class AssetRestoreTests(TestCase):
     def test_restore_other_tenant_asset_fails(self):
         other_tenant = create_tenant(name="Other Tenant")
         other_asset_type = create_asset_type(other_tenant, name="Motor")
-        other_asset = create_asset(other_tenant, other_asset_type, name="Motor X")
+        other_asset = create_asset(
+            other_tenant, other_asset_type, name="Motor X"
+        )
         other_asset.soft_delete()
 
         res = self.client.post(

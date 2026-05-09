@@ -84,9 +84,7 @@ class AssetTypeListCreateTests(TestCase):
 
         self.assertEqual(res.status_code, 201)
         self.assertTrue(
-            AssetType.objects.filter(
-                tenant=self.tenant, name="Pump"
-            ).exists()
+            AssetType.objects.filter(tenant=self.tenant, name="Pump").exists()
         )
 
     def test_create_asset_type_without_tenant_header_fails(self):

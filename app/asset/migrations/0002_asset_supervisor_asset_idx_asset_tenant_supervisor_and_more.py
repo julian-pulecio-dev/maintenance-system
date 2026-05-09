@@ -28,13 +28,15 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="asset",
             index=models.Index(
-                fields=["tenant", "supervisor"], name="idx_asset_tenant_supervisor"
+                fields=["tenant", "supervisor"],
+                name="idx_asset_tenant_supervisor",
             ),
         ),
         migrations.AddIndex(
             model_name="asset",
             index=models.Index(
-                fields=["supervisor", "status"], name="idx_asset_supervisor_status"
+                fields=["supervisor", "status"],
+                name="idx_asset_supervisor_status",
             ),
         ),
     ]
