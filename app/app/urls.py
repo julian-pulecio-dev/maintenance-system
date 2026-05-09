@@ -30,6 +30,7 @@ from user import urls as user_urls
 from tenant import urls as tenant_urls
 from asset import urls as asset_urls
 from asset_type import urls as asset_type_urls
+from outbox import urls as outbox_urls
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -57,4 +58,5 @@ urlpatterns = [
     path("api/tenant/", include(tenant_urls)),
     path("api/asset/", include(asset_urls)),
     path("api/asset-type/", include(asset_type_urls)),
+    path("api/outbox/", include(outbox_urls)),
 ]
