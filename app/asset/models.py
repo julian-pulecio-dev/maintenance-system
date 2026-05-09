@@ -1,6 +1,5 @@
 import uuid
 from datetime import timedelta
-from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction, IntegrityError
@@ -70,10 +69,6 @@ class AssetQuerySet(models.QuerySet):
         """Assets assigned to a specific supervisor."""
         return self.filter(supervisor=supervisor)
 
-    def unassigned(self):
-        """Assets with no supervisor assigned."""
-        return self.not_deleted().filter(supervisor__isnull=True)
-
     def overdue_for_supervisor(self, supervisor):
         """Assets with overdue maintenance under a given supervisor."""
         return self.for_supervisor(supervisor).overdue()
@@ -98,9 +93,7 @@ class Asset(models.Model):
 
     supervisor = models.ForeignKey(
         User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="supervised_assets",
         db_index=True,
         help_text="User responsible for supervising this asset",
@@ -239,15 +232,10 @@ class Asset(models.Model):
             raise ValidationError(exc.message_dict)
 
     def _validate_supervisor(self):
-        """Ensures the supervisor belongs to the same tenant as the asset."""
-        if self.supervisor_id and hasattr(self.supervisor, "tenant"):
+        if hasattr(self.supervisor, "tenant"):
             if self.supervisor.tenant_id != self.tenant_id:
                 raise ValidationError(
-                    {
-                        "supervisor": (
-                            "The supervisor must belong to the same tenant."
-                        )
-                    }
+                    {"supervisor": "The supervisor must belong to the same tenant."}
                 )
 
     def mark_as_active(self):
@@ -290,11 +278,6 @@ class Asset(models.Model):
         self.supervisor = supervisor
         self.save(update_fields=["supervisor", "updated_at"])
 
-    def unassign_supervisor(self):
-        """Removes the current supervisor."""
-        self.supervisor = None
-        self.save(update_fields=["supervisor", "updated_at"])
-
     @property
     def is_deleted(self):
         return self.deleted_at is not None
@@ -318,14 +301,10 @@ class Asset(models.Model):
 
     @property
     def has_supervisor(self) -> bool:
-        return self.supervisor_id is not None
+        return True
 
     @property
-    def supervisor_name(self) -> Optional[str]:
-        """Returns the supervisor's name without triggering an extra query
-        if the related object is already loaded in memory."""
-        if self.supervisor_id is None:
-            return None
+    def supervisor_name(self) -> str:
         return str(self.supervisor)
 
     def get_metadata_value(self, path: str, default=None):

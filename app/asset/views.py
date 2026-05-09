@@ -21,9 +21,7 @@ class AssetListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = Asset.objects.for_tenant(self.request.tenant).not_deleted()
         supervisor_param = self.request.query_params.get("supervisor")
-        if supervisor_param == "unassigned":
-            qs = qs.filter(supervisor__isnull=True)
-        elif supervisor_param:
+        if supervisor_param:
             qs = qs.filter(supervisor_id=supervisor_param)
         return qs
 
@@ -137,12 +135,4 @@ class AssetSupervisorView(APIView):
             )
 
         asset = AssetService.assign_supervisor(asset=asset, supervisor=supervisor)
-        return Response(AssetSerializer(asset, context={"request": request}).data)
-
-    def delete(self, request, pk):
-        asset = self._get_asset(request, pk)
-        if asset is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        asset = AssetService.unassign_supervisor(asset=asset)
         return Response(AssetSerializer(asset, context={"request": request}).data)

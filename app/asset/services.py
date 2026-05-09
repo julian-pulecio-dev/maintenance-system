@@ -17,9 +17,7 @@ class AssetNotDeletedException(Exception):
     pass
 
 
-def _serialize_supervisor(asset: Asset) -> Optional[Dict[str, Any]]:
-    if not asset.supervisor_id:
-        return None
+def _serialize_supervisor(asset: Asset) -> Dict[str, Any]:
     supervisor = asset.supervisor
     return {
         "id": str(supervisor.id),
@@ -188,18 +186,6 @@ class AssetService:
         _publish_event(
             asset=asset,
             event_type="asset.supervisor_assigned",
-            changed_fields=["supervisor"],
-        )
-        return asset
-
-    @staticmethod
-    @transaction.atomic
-    def unassign_supervisor(*, asset: Asset) -> Asset:
-        asset = Asset.objects.select_for_update().get(pk=asset.pk)
-        asset.unassign_supervisor()
-        _publish_event(
-            asset=asset,
-            event_type="asset.supervisor_unassigned",
             changed_fields=["supervisor"],
         )
         return asset

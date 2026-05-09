@@ -56,8 +56,6 @@ class AssetSerializer(serializers.ModelSerializer):
         return obj.has_supervisor
 
     def validate_supervisor(self, value):
-        if value is None:
-            return value
         tenant = self.context["request"].tenant
         if hasattr(value, "tenant_id") and value.tenant_id != tenant.id:
             raise serializers.ValidationError(
