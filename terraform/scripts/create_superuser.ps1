@@ -53,7 +53,22 @@ if ($TaskArns.Count -eq 0) {
 $TaskArn = $TaskArns[0]
 Write-Host "Task found: $TaskArn" -ForegroundColor Green
 
-Write-Host "=== 4. Creating superuser ===" -ForegroundColor Cyan
+Write-Host "=== 4. Running migrations ===" -ForegroundColor Cyan
+aws ecs execute-command `
+  --cluster $ClusterName `
+  --task $TaskArn `
+  --container $ContainerName `
+  --interactive `
+  --command "python manage.py migrate --no-input"
+
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Error running migrations." -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "Migrations applied." -ForegroundColor Green
+
+Write-Host "=== 5. Creating superuser ===" -ForegroundColor Cyan
 $Command = "python manage.py create_superuser_global --email `"$Email`" --password `"$Password`""
 if ($Name -ne "") {
   $Command += " --name `"$Name`""

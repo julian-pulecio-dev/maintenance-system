@@ -47,3 +47,21 @@ variable "max_receive_count" {
   type        = number
   default     = 3
 }
+
+variable "ses_from_email" {
+  description = "Verified SES sender address. When set, injected as SES_FROM_EMAIL and grants ses:SendEmail to the Lambda role."
+  type        = string
+  default     = null
+}
+
+variable "sqs_results_queue_url" {
+  description = "URL of the results SQS queue. When set, injected as SQS_RESULTS_URL env var in the Lambda."
+  type        = string
+  default     = null
+}
+
+variable "sqs_results_queue_arn" {
+  description = "ARN of the results SQS queue. When set, grants sqs:SendMessage to the Lambda role."
+  type        = string
+  default     = null
+}
