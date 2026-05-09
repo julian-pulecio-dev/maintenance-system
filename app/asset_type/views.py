@@ -1,5 +1,6 @@
+from django.db import IntegrityError
 from django.db.models.deletion import ProtectedError
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -17,7 +18,12 @@ class AssetTypeListCreateView(generics.ListCreateAPIView):
         return AssetType.objects.filter(tenant=self.request.tenant)
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
+        try:
+            serializer.save(tenant=self.request.tenant)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"name": "An asset type with this name already exists."}
+            )
 
 
 class AssetTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -28,6 +34,14 @@ class AssetTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return AssetType.objects.filter(tenant=self.request.tenant)
+
+    def perform_update(self, serializer):
+        try:
+            serializer.save()
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"name": "An asset type with this name already exists."}
+            )
 
     def destroy(self, request, *args, **kwargs):
         try:

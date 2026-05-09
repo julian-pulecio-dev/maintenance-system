@@ -1,7 +1,8 @@
 import copy
 from typing import Any, Dict, List, Optional
 
-from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from outbox.models import OutboxEvent
@@ -16,15 +17,37 @@ class AssetNotDeletedException(Exception):
     pass
 
 
+def _serialize_supervisor(asset: Asset) -> Optional[Dict[str, Any]]:
+    if not asset.supervisor_id:
+        return None
+    supervisor = asset.supervisor
+    return {
+        "id": str(supervisor.id),
+        "email": supervisor.email,
+        "name": supervisor.name,
+        "is_active": supervisor.is_active,
+    }
+
+
+def _serialize_asset_type(asset: Asset) -> Dict[str, Any]:
+    asset_type = asset.asset_type
+    return {
+        "id": str(asset_type.id),
+        "name": asset_type.name,
+        "description": asset_type.description,
+    }
+
+
 def _build_payload(asset: Asset) -> Dict[str, Any]:
     return {
         "version": 1,
         "data": {
             "id": str(asset.id),
             "tenant_id": str(asset.tenant_id),
+            "supervisor": _serialize_supervisor(asset),
             "serial_number": asset.serial_number,
             "name": asset.name,
-            "asset_type_id": str(asset.asset_type_id),
+            "asset_type": _serialize_asset_type(asset),
             "location": asset.location,
             "installation_date": (
                 asset.installation_date.isoformat()
@@ -81,10 +104,12 @@ class AssetService:
         tenant,
         validated_data: Dict[str, Any],
     ) -> Asset:
-        asset = Asset.objects.create(
-            tenant=tenant,
-            **validated_data,
-        )
+        try:
+            asset = Asset.objects.create(tenant=tenant, **validated_data)
+        except IntegrityError:
+            raise DjangoValidationError(
+                {"serial_number": "An active asset with this serial number already exists."}
+            )
 
         _publish_event(
             asset=asset,
@@ -119,7 +144,12 @@ class AssetService:
         asset.updated_at = timezone.now()
         changed_fields.append("updated_at")
 
-        asset.save(update_fields=changed_fields)
+        try:
+            asset.save(update_fields=changed_fields)
+        except IntegrityError:
+            raise DjangoValidationError(
+                {"serial_number": "An active asset with this serial number already exists."}
+            )
 
         _publish_event(
             asset=asset,
@@ -148,6 +178,30 @@ class AssetService:
             event_type="asset.deleted",
         )
 
+        return asset
+
+    @staticmethod
+    @transaction.atomic
+    def assign_supervisor(*, asset: Asset, supervisor) -> Asset:
+        asset = Asset.objects.select_for_update().get(pk=asset.pk)
+        asset.assign_supervisor(supervisor)
+        _publish_event(
+            asset=asset,
+            event_type="asset.supervisor_assigned",
+            changed_fields=["supervisor"],
+        )
+        return asset
+
+    @staticmethod
+    @transaction.atomic
+    def unassign_supervisor(*, asset: Asset) -> Asset:
+        asset = Asset.objects.select_for_update().get(pk=asset.pk)
+        asset.unassign_supervisor()
+        _publish_event(
+            asset=asset,
+            event_type="asset.supervisor_unassigned",
+            changed_fields=["supervisor"],
+        )
         return asset
 
     @staticmethod

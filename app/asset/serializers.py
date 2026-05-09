@@ -1,18 +1,26 @@
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import Asset
+
+User = get_user_model()
 
 
 class AssetSerializer(serializers.ModelSerializer):
     next_maintenance_date = serializers.SerializerMethodField()
     is_maintenance_overdue = serializers.SerializerMethodField()
     is_deleted = serializers.SerializerMethodField()
+    supervisor_name = serializers.SerializerMethodField()
+    has_supervisor = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
         fields = (
             "id",
+            "supervisor",
+            "supervisor_name",
+            "has_supervisor",
             "serial_number",
             "name",
             "asset_type",
@@ -40,6 +48,22 @@ class AssetSerializer(serializers.ModelSerializer):
 
     def get_is_deleted(self, obj):
         return obj.is_deleted
+
+    def get_supervisor_name(self, obj):
+        return obj.supervisor_name
+
+    def get_has_supervisor(self, obj):
+        return obj.has_supervisor
+
+    def validate_supervisor(self, value):
+        if value is None:
+            return value
+        tenant = self.context["request"].tenant
+        if hasattr(value, "tenant_id") and value.tenant_id != tenant.id:
+            raise serializers.ValidationError(
+                "The supervisor must belong to the same tenant."
+            )
+        return value
 
     def validate_asset_type(self, value):
         tenant = self.context["request"].tenant

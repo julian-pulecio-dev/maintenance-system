@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction, IntegrityError
@@ -16,7 +17,7 @@ from django.utils import timezone
 from asset.schemas import validate_asset_metadata
 from asset_type.models import AssetType
 from tenant.models import Tenant
-
+from user.models import User
 
 class AssetQuerySet(models.QuerySet):
 
@@ -65,6 +66,18 @@ class AssetQuerySet(models.QuerySet):
             .filter(next_maintenance_date__lte=target_date)
         )
 
+    def for_supervisor(self, supervisor):
+        """Assets assigned to a specific supervisor."""
+        return self.filter(supervisor=supervisor)
+
+    def unassigned(self):
+        """Assets with no supervisor assigned."""
+        return self.not_deleted().filter(supervisor__isnull=True)
+
+    def overdue_for_supervisor(self, supervisor):
+        """Assets with overdue maintenance under a given supervisor."""
+        return self.for_supervisor(supervisor).overdue()
+
 
 class Asset(models.Model):
 
@@ -81,6 +94,16 @@ class Asset(models.Model):
         on_delete=models.PROTECT,
         related_name="assets",
         db_index=True,
+    )
+
+    supervisor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supervised_assets",
+        db_index=True,
+        help_text="User responsible for supervising this asset",
     )
 
     serial_number = models.CharField(
@@ -144,6 +167,15 @@ class Asset(models.Model):
                 fields=["tenant", "last_maintenance_date"],
                 name="idx_asset_tenant_maintenance",
             ),
+            # Supervisor indexes
+            models.Index(
+                fields=["tenant", "supervisor"],
+                name="idx_asset_tenant_supervisor",
+            ),
+            models.Index(
+                fields=["supervisor", "status"],
+                name="idx_asset_supervisor_status",
+            ),
         ]
 
         constraints = [
@@ -172,6 +204,7 @@ class Asset(models.Model):
         super().clean()
         self._validate_dates()
         self._validate_metadata()
+        self._validate_supervisor()
 
     def _validate_dates(self):
         today = timezone.now().date()
@@ -204,6 +237,18 @@ class Asset(models.Model):
             validate_asset_metadata(self)
         except ValidationError as exc:
             raise ValidationError(exc.message_dict)
+
+    def _validate_supervisor(self):
+        """Ensures the supervisor belongs to the same tenant as the asset."""
+        if self.supervisor_id and hasattr(self.supervisor, "tenant"):
+            if self.supervisor.tenant_id != self.tenant_id:
+                raise ValidationError(
+                    {
+                        "supervisor": (
+                            "The supervisor must belong to the same tenant."
+                        )
+                    }
+                )
 
     def mark_as_active(self):
         self.status = self.AssetStatus.ACTIVE
@@ -240,6 +285,16 @@ class Asset(models.Model):
             days=self.recommended_maintenance_interval_days
         )
 
+    def assign_supervisor(self, supervisor):
+        """Assigns a supervisor and persists the change."""
+        self.supervisor = supervisor
+        self.save(update_fields=["supervisor", "updated_at"])
+
+    def unassign_supervisor(self):
+        """Removes the current supervisor."""
+        self.supervisor = None
+        self.save(update_fields=["supervisor", "updated_at"])
+
     @property
     def is_deleted(self):
         return self.deleted_at is not None
@@ -260,6 +315,18 @@ class Asset(models.Model):
             return False
 
         return timezone.now().date() > next_date
+
+    @property
+    def has_supervisor(self) -> bool:
+        return self.supervisor_id is not None
+
+    @property
+    def supervisor_name(self) -> Optional[str]:
+        """Returns the supervisor's name without triggering an extra query
+        if the related object is already loaded in memory."""
+        if self.supervisor_id is None:
+            return None
+        return str(self.supervisor)
 
     def get_metadata_value(self, path: str, default=None):
         current = self.metadata
