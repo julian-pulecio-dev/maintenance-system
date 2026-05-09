@@ -7,6 +7,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from tenant.permissions import TenantHeaderRequired
 from .models import Asset
 from .serializers import AssetSerializer
+from .services import AssetAlreadyDeletedException, AssetNotDeletedException, AssetService
 
 
 class AssetListCreateView(generics.ListCreateAPIView):
@@ -18,7 +19,11 @@ class AssetListCreateView(generics.ListCreateAPIView):
         return Asset.objects.for_tenant(self.request.tenant).not_deleted()
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
+        asset = AssetService.create_asset(
+            tenant=self.request.tenant,
+            validated_data=serializer.validated_data,
+        )
+        serializer.instance = asset
 
 
 class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -30,9 +35,22 @@ class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return Asset.objects.for_tenant(self.request.tenant)
 
+    def perform_update(self, serializer):
+        asset = AssetService.update_asset(
+            asset=serializer.instance,
+            validated_data=serializer.validated_data,
+        )
+        serializer.instance = asset
+
     def destroy(self, request, *args, **kwargs):
         asset = self.get_object()
-        asset.soft_delete()
+        try:
+            AssetService.delete_asset(asset=asset)
+        except AssetAlreadyDeletedException:
+            return Response(
+                {"detail": "Asset is already deleted."},
+                status=status.HTTP_409_CONFLICT,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -46,14 +64,13 @@ class AssetRestoreView(APIView):
         except Asset.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        if not asset.is_deleted:
+        try:
+            asset = AssetService.restore_asset(asset=asset)
+        except AssetNotDeletedException:
             return Response(
                 {"detail": "Asset is not deleted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        try:
-            asset.restore()
         except DjangoValidationError as exc:
             if hasattr(exc, "message_dict"):
                 return Response(
