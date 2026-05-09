@@ -1,5 +1,5 @@
 import copy
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from django.db import transaction
 from django.utils import timezone
@@ -16,7 +16,7 @@ class AssetNotDeletedException(Exception):
     pass
 
 
-def _build_payload(asset: Asset) -> dict[str, Any]:
+def _build_payload(asset: Asset) -> Dict[str, Any]:
     return {
         "version": 1,
         "data": {
@@ -55,7 +55,7 @@ def _publish_event(
     *,
     asset: Asset,
     event_type: str,
-    changed_fields: list[str] | None = None,
+    changed_fields: Optional[List[str]] = None,
 ) -> OutboxEvent:
     payload = _build_payload(asset)
 
@@ -79,7 +79,7 @@ class AssetService:
     def create_asset(
         *,
         tenant,
-        validated_data: dict[str, Any],
+        validated_data: Dict[str, Any],
     ) -> Asset:
         asset = Asset.objects.create(
             tenant=tenant,
@@ -98,13 +98,13 @@ class AssetService:
     def update_asset(
         *,
         asset: Asset,
-        validated_data: dict[str, Any],
+        validated_data: Dict[str, Any],
     ) -> Asset:
         # select_for_update() ensures no other worker can modify
         # this asset until the transaction completes.
         asset = Asset.objects.select_for_update().get(pk=asset.pk)
 
-        changed_fields: list[str] = []
+        changed_fields: List[str] = []
 
         for field, value in validated_data.items():
             if getattr(asset, field) != value:
