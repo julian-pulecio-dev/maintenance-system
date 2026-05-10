@@ -45,10 +45,13 @@ class MeView(BaseUserView, generics.RetrieveUpdateDestroyAPIView):
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
 
-class ListUsersView(BaseUserView, generics.ListAPIView):
-    permission_classes = [permissions.IsAdminUser]
+class ListUsersView(generics.ListAPIView):
+    serializer_class = UserSerializer
     authentication_classes = [JWTAuthentication]
-    queryset = get_user_model().objects.all()
+    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+
+    def get_queryset(self):
+        return get_user_model().objects.filter(tenant=self.request.tenant)
 
 
 class ForgotPasswordView(APIView):
