@@ -86,10 +86,34 @@ module "ecs_maintenance_checker" {
 
 module "asset_email_notifier_worker" {
   source             = "./modules/sns_subscriber"
-  name               = "${var.name}-email-notifier-worker"
+  name               = "${var.name}-asset-email-notifier-worker"
   sns_topic_arn      = module.sns_outbox_observer.topic_arn
   filter_event_types = ["asset.created", "asset.updated", "asset.deleted"]
   source_dir         = "${path.root}/../lambdas/asset_email_notifier"
+  shared_dir         = "${path.root}/../lambdas/shared"
+
+  sqs_results_queue_url = module.sqs_outbox_results.queue_url
+  sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  ses_from_email        = var.email_default_from
+}
+
+module "work_order_email_notifier_worker" {
+  source             = "./modules/sns_subscriber"
+  name               = "${var.name}-work-order-notifier"
+  sns_topic_arn      = module.sns_outbox_observer.topic_arn
+  filter_event_types = [
+                        "work_order.created",
+                        "work_order.updated",
+                        "work_order.deleted",
+                        "work_order.assigned",
+                        "work_order.started",
+                        "work_order.put_on_hold",
+                        "work_order.completed",
+                        "work_order.cancelled",
+                        "work_order.restored",
+                        ]
+  source_dir         = "${path.root}/../lambdas/work_order_email_notifier"
+  shared_dir         = "${path.root}/../lambdas/shared"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
@@ -98,10 +122,11 @@ module "asset_email_notifier_worker" {
 
 module "asset_maintenance_email_notifier_worker" {
   source             = "./modules/sns_subscriber"
-  name               = "${var.name}-maintenance-email-notifier-worker"
+  name               = "${var.name}-asset-maint-notifier"
   sns_topic_arn      = module.sns_outbox_observer.topic_arn
   filter_event_types = ["asset.maintenance.upcoming", "asset.maintenance.overdue"]
   source_dir         = "${path.root}/../lambdas/asset_maintenance_email_notifier"
+  shared_dir         = "${path.root}/../lambdas/shared"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn

@@ -24,8 +24,15 @@ resource "aws_dynamodb_table" "idempotency" {
 }
 
 data "archive_file" "lambda" {
-  type        = "zip"
-  source_dir  = var.source_dir
+  type = "zip"
+  source {
+    content  = file("${var.source_dir}/handler.py")
+    filename = "handler.py"
+  }
+  source {
+    content  = file("${var.shared_dir}/notifier_base.py")
+    filename = "notifier_base.py"
+  }
   output_path = "${path.module}/builds/${var.name}.zip"
 }
 
