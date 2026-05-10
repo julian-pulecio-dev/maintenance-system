@@ -26,13 +26,15 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="workorder",
             index=models.Index(
-                fields=["tenant", "deleted_at"], name="idx_work_order_tenant_deleted"
+                fields=["tenant", "deleted_at"],
+                name="idx_work_order_tenant_deleted",
             ),
         ),
         migrations.AddIndex(
             model_name="workorder",
             index=models.Index(
-                fields=["tenant", "status"], name="idx_work_order_tenant_status"
+                fields=["tenant", "status"],
+                name="idx_work_order_tenant_status",
             ),
         ),
         migrations.AddIndex(
@@ -44,19 +46,22 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="workorder",
             index=models.Index(
-                fields=["tenant", "assigned_to"], name="idx_work_order_tenant_assigned"
+                fields=["tenant", "assigned_to"],
+                name="idx_work_order_tenant_assigned",
             ),
         ),
         migrations.AddIndex(
             model_name="workorder",
             index=models.Index(
-                fields=["tenant", "due_date"], name="idx_work_order_tenant_due_date"
+                fields=["tenant", "due_date"],
+                name="idx_work_order_tenant_due_date",
             ),
         ),
         migrations.AddIndex(
             model_name="workorder",
             index=models.Index(
-                fields=["tenant", "priority"], name="idx_work_order_tenant_priority"
+                fields=["tenant", "priority"],
+                name="idx_work_order_tenant_priority",
             ),
         ),
         migrations.AddConstraint(

@@ -32,11 +32,7 @@ def _build_idempotency_key(
     Same asset + same event type + same maintenance date
     = same logical event.
     """
-    return (
-        f"{event_type}:"
-        f"{asset_id}:"
-        f"{maintenance_date.isoformat()}"
-    )
+    return f"{event_type}:" f"{asset_id}:" f"{maintenance_date.isoformat()}"
 
 
 def _create_outbox_event(
@@ -64,10 +60,7 @@ def _create_outbox_event(
         )
 
         logger.info(
-            (
-                "Maintenance outbox event created "
-                "event_type=%s asset_id=%s"
-            ),
+            ("Maintenance outbox event created " "event_type=%s asset_id=%s"),
             event_type,
             asset.id,
         )
@@ -111,18 +104,18 @@ def _publish_upcoming_notification(
                 "description": asset.description,
                 "installation_date": (
                     asset.installation_date.isoformat()
-                    if asset.installation_date else None
+                    if asset.installation_date
+                    else None
                 ),
                 "last_maintenance_date": (
                     asset.last_maintenance_date.isoformat()
-                    if asset.last_maintenance_date else None
+                    if asset.last_maintenance_date
+                    else None
                 ),
                 "recommended_maintenance_interval_days": (
                     asset.recommended_maintenance_interval_days
                 ),
-                "next_maintenance_date": (
-                    maintenance_date.isoformat()
-                ),
+                "next_maintenance_date": (maintenance_date.isoformat()),
                 "days_left": days_left,
                 "supervisor": {
                     "email": asset.supervisor.email,
@@ -159,18 +152,18 @@ def _publish_overdue_notification(
                 "description": asset.description,
                 "installation_date": (
                     asset.installation_date.isoformat()
-                    if asset.installation_date else None
+                    if asset.installation_date
+                    else None
                 ),
                 "last_maintenance_date": (
                     asset.last_maintenance_date.isoformat()
-                    if asset.last_maintenance_date else None
+                    if asset.last_maintenance_date
+                    else None
                 ),
                 "recommended_maintenance_interval_days": (
                     asset.recommended_maintenance_interval_days
                 ),
-                "next_maintenance_date": (
-                    maintenance_date.isoformat()
-                ),
+                "next_maintenance_date": (maintenance_date.isoformat()),
                 "days_overdue": days_overdue,
                 "supervisor": {
                     "email": asset.supervisor.email,
@@ -187,9 +180,7 @@ def check_maintenance_dates():
 
     today = timezone.now().date()
 
-    warning_cutoff = (
-        today + timedelta(days=MAINTENANCE_WARNING_DAYS)
-    )
+    warning_cutoff = today + timedelta(days=MAINTENANCE_WARNING_DAYS)
 
     assets = (
         Asset.objects.not_deleted()
@@ -209,9 +200,7 @@ def check_maintenance_dates():
 
             if maintenance_date < today:
 
-                days_overdue = (
-                    today - maintenance_date
-                ).days
+                days_overdue = (today - maintenance_date).days
 
                 created = _publish_overdue_notification(
                     asset=asset,
@@ -226,9 +215,7 @@ def check_maintenance_dates():
 
             elif maintenance_date <= warning_cutoff:
 
-                days_left = (
-                    maintenance_date - today
-                ).days
+                days_left = (maintenance_date - today).days
 
                 created = _publish_upcoming_notification(
                     asset=asset,
@@ -246,18 +233,12 @@ def check_maintenance_dates():
 
         except Exception:
             logger.exception(
-                (
-                    "Failed to process maintenance "
-                    "notification asset_id=%s"
-                ),
+                ("Failed to process maintenance " "notification asset_id=%s"),
                 asset.id,
             )
 
     logger.info(
-        (
-            "Maintenance check complete "
-            "upcoming=%d overdue=%d skipped=%d"
-        ),
+        ("Maintenance check complete " "upcoming=%d overdue=%d skipped=%d"),
         upcoming_count,
         overdue_count,
         skipped_count,
@@ -280,13 +261,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
 
-        self.stdout.write(
-            "Starting maintenance notification check..."
-        )
+        self.stdout.write("Starting maintenance notification check...")
 
-        upcoming, overdue, skipped = (
-            check_maintenance_dates()
-        )
+        upcoming, overdue, skipped = check_maintenance_dates()
 
         self.stdout.write(
             self.style.SUCCESS(

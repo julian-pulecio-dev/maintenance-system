@@ -44,6 +44,7 @@ def create_asset(tenant, asset_type, **kwargs):
         )
     defaults = {
         "name": "Main Pump",
+        "serial_number": uuid.uuid4().hex[:12],
         "location": "Building A",
         "installation_date": date(2020, 1, 1),
         "recommended_maintenance_interval_days": 30,
@@ -115,6 +116,7 @@ class AssetListCreateTests(TestCase):
     def test_create_asset_success(self):
         payload = {
             "name": "New Pump",
+            "serial_number": "SN-001",
             "asset_type": str(self.asset_type.id),
             "supervisor": str(self.user.id),
             "location": "Building B",

@@ -48,6 +48,8 @@ class WorkOrderTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
             return super().destroy(request, *args, **kwargs)
         except ProtectedError:
             return Response(
-                {"detail": "Cannot delete work order type with existing work orders."},
+                {
+                    "detail": "Cannot delete work order type with existing work orders."
+                },
                 status=status.HTTP_409_CONFLICT,
             )

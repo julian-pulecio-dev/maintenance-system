@@ -1,7 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from outbox.models import OutboxEvent
@@ -205,7 +204,7 @@ class WorkOrderService:
 
     @staticmethod
     @transaction.atomic
-    def restore_work_order(*, work_order: WorkOrder) -> WorkOrder:
+    def restore_work_order(*, work_order: WorkOrder, notes: str) -> WorkOrder:
         # select_for_update() prevents race conditions between workers
         # attempting to restore the same work order concurrently.
         work_order = WorkOrder.objects.select_for_update().get(
@@ -218,98 +217,112 @@ class WorkOrderService:
                 f"and cannot be restored."
             )
 
-        work_order.restore()
+        work_order.restore(notes)
 
         _publish_event(
             work_order=work_order,
             event_type="work_order.restored",
+            changed_fields=["deleted_at", "notes"],
         )
 
         return work_order
 
     @staticmethod
     @transaction.atomic
-    def assign_to(*, work_order: WorkOrder, user) -> WorkOrder:
+    def assign_to(*, work_order: WorkOrder, user, notes: str) -> WorkOrder:
         # select_for_update() prevents race conditions between workers
         # attempting to reassign the same work order concurrently.
         work_order = WorkOrder.objects.select_for_update().get(
             pk=work_order.pk,
         )
 
-        work_order.assign_to(user)
+        work_order.assign_to(user, notes)
 
         _publish_event(
             work_order=work_order,
             event_type="work_order.assigned",
-            changed_fields=["assigned_to"],
+            changed_fields=["assigned_to", "notes"],
         )
 
         return work_order
 
     @staticmethod
     @transaction.atomic
-    def start_work_order(*, work_order: WorkOrder) -> WorkOrder:
+    def start_work_order(*, work_order: WorkOrder, notes: str) -> WorkOrder:
         work_order = WorkOrder.objects.select_for_update().get(
             pk=work_order.pk,
         )
 
-        work_order.start()
+        work_order.start(notes)
 
         _publish_event(
             work_order=work_order,
             event_type="work_order.started",
-            changed_fields=["status", "completed_date"],
+            changed_fields=["status", "completed_date", "notes"],
         )
 
         return work_order
 
     @staticmethod
     @transaction.atomic
-    def put_work_order_on_hold(*, work_order: WorkOrder) -> WorkOrder:
+    def put_work_order_on_hold(
+        *, work_order: WorkOrder, notes: str
+    ) -> WorkOrder:
         work_order = WorkOrder.objects.select_for_update().get(
             pk=work_order.pk,
         )
 
-        work_order.put_on_hold()
+        work_order.put_on_hold(notes)
 
         _publish_event(
             work_order=work_order,
             event_type="work_order.put_on_hold",
-            changed_fields=["status", "completed_date"],
+            changed_fields=["status", "completed_date", "notes"],
         )
 
         return work_order
 
     @staticmethod
     @transaction.atomic
-    def complete_work_order(*, work_order: WorkOrder) -> WorkOrder:
+    def complete_work_order(
+        *, work_order: WorkOrder, notes: str, estimated_hours
+    ) -> WorkOrder:
         work_order = WorkOrder.objects.select_for_update().get(
             pk=work_order.pk,
         )
 
-        work_order.complete()
+        work_order.complete(notes, estimated_hours)
+
+        asset = work_order.asset
+        asset.last_maintenance_date = work_order.completed_date
+        asset.save(update_fields=["last_maintenance_date", "updated_at"])
 
         _publish_event(
             work_order=work_order,
             event_type="work_order.completed",
-            changed_fields=["status", "completed_date"],
+            changed_fields=[
+                "status",
+                "completed_date",
+                "estimated_hours",
+                "notes",
+            ],
         )
 
         return work_order
 
     @staticmethod
     @transaction.atomic
-    def cancel_work_order(*, work_order: WorkOrder) -> WorkOrder:
+    def cancel_work_order(*, work_order: WorkOrder, notes: str) -> WorkOrder:
         work_order = WorkOrder.objects.select_for_update().get(
             pk=work_order.pk,
         )
 
-        work_order.cancel()
+        work_order.cancel(notes)
 
         _publish_event(
             work_order=work_order,
             event_type="work_order.cancelled",
-            changed_fields=["status", "completed_date"],
+            changed_fields=["status", "completed_date", "notes"],
         )
 
         return work_order

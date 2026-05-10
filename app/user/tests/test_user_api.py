@@ -120,8 +120,9 @@ class AuthenticatedUserApiTests(TestCase):
         self.assertEqual(res.status_code, 401)
 
     def test_list_users_success(self):
-        self.client.force_authenticate(user=self.superuser)
-        res = self.client.get(LIST_USERS_URL)
+        res = self.client.get(
+            LIST_USERS_URL, HTTP_X_TENANT_ID=str(self.tenant.id)
+        )
         self.assertEqual(res.status_code, 200)
 
     def test_list_users_unauthenticated(self):

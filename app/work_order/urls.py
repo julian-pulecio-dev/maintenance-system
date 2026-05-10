@@ -19,7 +19,9 @@ urlpatterns = [
     path("<uuid:pk>/restore/", WorkOrderRestoreView.as_view(), name="restore"),
     path("<uuid:pk>/start/", WorkOrderStartView.as_view(), name="start"),
     path("<uuid:pk>/hold/", WorkOrderHoldView.as_view(), name="hold"),
-    path("<uuid:pk>/complete/", WorkOrderCompleteView.as_view(), name="complete"),
+    path(
+        "<uuid:pk>/complete/", WorkOrderCompleteView.as_view(), name="complete"
+    ),
     path("<uuid:pk>/cancel/", WorkOrderCancelView.as_view(), name="cancel"),
     path("<uuid:pk>/assign/", WorkOrderAssignView.as_view(), name="assign"),
 ]
