@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     "outbox",
     "asset",
     "asset_type",
+    "work_order",
+    "work_order_type",
 ]
 
 MIDDLEWARE = [

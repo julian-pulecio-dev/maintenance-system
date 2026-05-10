@@ -31,6 +31,8 @@ from tenant import urls as tenant_urls
 from asset import urls as asset_urls
 from asset_type import urls as asset_type_urls
 from outbox import urls as outbox_urls
+from work_order import urls as work_order_urls
+from work_order_type import urls as work_order_type_urls
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -59,4 +61,6 @@ urlpatterns = [
     path("api/asset/", include(asset_urls)),
     path("api/asset-type/", include(asset_type_urls)),
     path("api/outbox/", include(outbox_urls)),
+    path("api/work-order/", include(work_order_urls)),
+    path("api/work-order-type/", include(work_order_type_urls)),
 ]
