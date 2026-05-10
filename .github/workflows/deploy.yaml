@@ -57,8 +57,20 @@ jobs:
           echo "MIGRATION_TASK=$(terraform output -raw migration_task_definition || exit 1)" >> $GITHUB_OUTPUT
           echo "SUBNETS=$(terraform output -json public_subnets || exit 1)" >> $GITHUB_OUTPUT
           echo "SG=$(terraform output -raw ecs_security_group || exit 1)" >> $GITHUB_OUTPUT
-          echo "OUTBOX_CLUSTER=$(terraform output -raw outbox_cluster_name || exit 1)" >> $GITHUB_OUTPUT
-          echo "OUTBOX_SERVICE=$(terraform output -raw outbox_service_name || exit 1)" >> $GITHUB_OUTPUT
+
+      - name: Read outbox cluster and service from AWS
+        id: outbox
+        run: |
+          OUTBOX_CLUSTER=$(aws ecs list-clusters \
+            --query "clusterArns[?contains(@,'outbox')]" \
+            --output text | xargs -I{} bash -c 'basename {}')
+          echo "CLUSTER=$OUTBOX_CLUSTER" >> $GITHUB_OUTPUT
+
+          OUTBOX_SERVICE=$(aws ecs list-services \
+            --cluster "$OUTBOX_CLUSTER" \
+            --query "serviceArns[0]" \
+            --output text | xargs -I{} bash -c 'basename {}')
+          echo "SERVICE=$OUTBOX_SERVICE" >> $GITHUB_OUTPUT
 
       # ---------- RUN MIGRATIONS ----------
       - name: Run migration task
@@ -131,6 +143,6 @@ jobs:
             --force-new-deployment
 
           aws ecs update-service \
-            --cluster ${{ steps.tf.outputs.OUTBOX_CLUSTER }} \
-            --service ${{ steps.tf.outputs.OUTBOX_SERVICE }} \
+            --cluster ${{ steps.outbox.outputs.CLUSTER }} \
+            --service ${{ steps.outbox.outputs.SERVICE }} \
             --force-new-deployment
