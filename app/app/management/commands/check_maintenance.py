@@ -99,12 +99,38 @@ def _publish_upcoming_notification(
         event_type=EVENT_UPCOMING,
         maintenance_date=maintenance_date,
         payload={
-            "asset_id": str(asset.id),
-            "asset_name": asset.name,
-            "next_maintenance_date": (
-                maintenance_date.isoformat()
-            ),
-            "days_left": days_left,
+            "data": {
+                "id": str(asset.id),
+                "name": asset.name,
+                "serial_number": asset.serial_number,
+                "asset_type": {
+                    "name": asset.asset_type.name,
+                },
+                "status": asset.status,
+                "location": asset.location,
+                "description": asset.description,
+                "installation_date": (
+                    asset.installation_date.isoformat()
+                    if asset.installation_date else None
+                ),
+                "last_maintenance_date": (
+                    asset.last_maintenance_date.isoformat()
+                    if asset.last_maintenance_date else None
+                ),
+                "recommended_maintenance_interval_days": (
+                    asset.recommended_maintenance_interval_days
+                ),
+                "next_maintenance_date": (
+                    maintenance_date.isoformat()
+                ),
+                "days_left": days_left,
+                "supervisor": {
+                    "email": asset.supervisor.email,
+                    "name": asset.supervisor.name,
+                },
+                "created_at": asset.created_at.isoformat(),
+                "updated_at": asset.updated_at.isoformat(),
+            },
         },
     )
 
@@ -121,12 +147,38 @@ def _publish_overdue_notification(
         event_type=EVENT_OVERDUE,
         maintenance_date=maintenance_date,
         payload={
-            "asset_id": str(asset.id),
-            "asset_name": asset.name,
-            "next_maintenance_date": (
-                maintenance_date.isoformat()
-            ),
-            "days_overdue": days_overdue,
+            "data": {
+                "id": str(asset.id),
+                "name": asset.name,
+                "serial_number": asset.serial_number,
+                "asset_type": {
+                    "name": asset.asset_type.name,
+                },
+                "status": asset.status,
+                "location": asset.location,
+                "description": asset.description,
+                "installation_date": (
+                    asset.installation_date.isoformat()
+                    if asset.installation_date else None
+                ),
+                "last_maintenance_date": (
+                    asset.last_maintenance_date.isoformat()
+                    if asset.last_maintenance_date else None
+                ),
+                "recommended_maintenance_interval_days": (
+                    asset.recommended_maintenance_interval_days
+                ),
+                "next_maintenance_date": (
+                    maintenance_date.isoformat()
+                ),
+                "days_overdue": days_overdue,
+                "supervisor": {
+                    "email": asset.supervisor.email,
+                    "name": asset.supervisor.name,
+                },
+                "created_at": asset.created_at.isoformat(),
+                "updated_at": asset.updated_at.isoformat(),
+            },
         },
     )
 
@@ -141,17 +193,8 @@ def check_maintenance_dates():
 
     assets = (
         Asset.objects.not_deleted()
-        .filter(
-            last_maintenance_date__isnull=False,
-            next_maintenance_date__isnull=False,
-            next_maintenance_date__lte=warning_cutoff,
-        )
-        .only(
-            "id",
-            "tenant_id",
-            "name",
-            "next_maintenance_date",
-        )
+        .select_related("supervisor", "asset_type")
+        .filter(last_maintenance_date__isnull=False)
     )
 
     upcoming_count = 0
@@ -181,7 +224,7 @@ def check_maintenance_dates():
                 else:
                     skipped_count += 1
 
-            else:
+            elif maintenance_date <= warning_cutoff:
 
                 days_left = (
                     maintenance_date - today
@@ -197,6 +240,9 @@ def check_maintenance_dates():
                     upcoming_count += 1
                 else:
                     skipped_count += 1
+
+            else:
+                skipped_count += 1
 
         except Exception:
             logger.exception(
