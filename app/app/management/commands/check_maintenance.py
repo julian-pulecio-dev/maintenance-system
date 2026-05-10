@@ -7,98 +7,91 @@ from django.utils import timezone
 
 from asset.models import Asset
 from outbox.models import OutboxEvent
+from work_order.models import WorkOrder
 
 logger = logging.getLogger(__name__)
 
-MAINTENANCE_WARNING_DAYS = 7
+WARNING_DAYS = 7
 
-SOURCE_SERVICE = "asset-service"
-AGGREGATE_TYPE = "Asset"
+ASSET_SOURCE_SERVICE = "asset-service"
+ASSET_AGGREGATE_TYPE = "Asset"
 
-EVENT_UPCOMING = "asset.maintenance.upcoming"
-EVENT_OVERDUE = "asset.maintenance.overdue"
+EVENT_MAINTENANCE_UPCOMING = "asset.maintenance.upcoming"
+EVENT_MAINTENANCE_OVERDUE = "asset.maintenance.overdue"
+
+WO_SOURCE_SERVICE = "work-order-service"
+WO_AGGREGATE_TYPE = "WorkOrder"
+
+EVENT_WO_DUE_UPCOMING = "work_order.due_date.upcoming"
+EVENT_WO_DUE_OVERDUE = "work_order.due_date.overdue"
+
+_WO_ACTIVE_STATUSES = {
+    WorkOrder.WorkOrderStatus.OPEN,
+    WorkOrder.WorkOrderStatus.IN_PROGRESS,
+    WorkOrder.WorkOrderStatus.ON_HOLD,
+}
 
 
-def _build_idempotency_key(
+def _build_idempotency_key(*, event_type: str, aggregate_id, ref_date) -> str:
+    return f"{event_type}:{aggregate_id}:{ref_date.isoformat()}"
+
+
+def _try_create_outbox_event(
     *,
+    tenant_id,
     event_type: str,
-    asset_id,
-    maintenance_date,
-) -> str:
-    """
-    Generates a deterministic idempotency key for a
-    maintenance notification cycle.
-
-    Same asset + same event type + same maintenance date
-    = same logical event.
-    """
-    return f"{event_type}:" f"{asset_id}:" f"{maintenance_date.isoformat()}"
-
-
-def _create_outbox_event(
-    *,
-    asset: Asset,
-    event_type: str,
-    maintenance_date,
+    aggregate_type: str,
+    aggregate_id,
+    source_service: str,
+    idempotency_key: str,
     payload: dict,
 ) -> bool:
-
     try:
         OutboxEvent.objects.create(
             event_type=event_type,
-            aggregate_type=AGGREGATE_TYPE,
-            aggregate_id=asset.id,
-            tenant_id=asset.tenant_id,
+            aggregate_type=aggregate_type,
+            aggregate_id=aggregate_id,
+            tenant_id=tenant_id,
             payload=payload,
             event_version=1,
-            source_service=SOURCE_SERVICE,
-            idempotency_key=_build_idempotency_key(
-                event_type=event_type,
-                asset_id=asset.id,
-                maintenance_date=maintenance_date,
-            ),
+            source_service=source_service,
+            idempotency_key=idempotency_key,
         )
-
         logger.info(
-            ("Maintenance outbox event created " "event_type=%s asset_id=%s"),
+            "Outbox event created event_type=%s aggregate_id=%s",
             event_type,
-            asset.id,
+            aggregate_id,
         )
-
         return True
-
     except IntegrityError:
         logger.debug(
-            (
-                "Maintenance notification already exists "
-                "event_type=%s asset_id=%s"
-            ),
+            "Notification already exists event_type=%s aggregate_id=%s",
             event_type,
-            asset.id,
+            aggregate_id,
         )
-
         return False
 
 
-def _publish_upcoming_notification(
-    *,
-    asset: Asset,
-    maintenance_date,
-    days_left: int,
+def _publish_maintenance_upcoming(
+    *, asset: Asset, maintenance_date, days_left: int
 ) -> bool:
-
-    return _create_outbox_event(
-        asset=asset,
-        event_type=EVENT_UPCOMING,
-        maintenance_date=maintenance_date,
+    return _try_create_outbox_event(
+        tenant_id=asset.tenant_id,
+        event_type=EVENT_MAINTENANCE_UPCOMING,
+        aggregate_type=ASSET_AGGREGATE_TYPE,
+        aggregate_id=asset.id,
+        source_service=ASSET_SOURCE_SERVICE,
+        idempotency_key=_build_idempotency_key(
+            event_type=EVENT_MAINTENANCE_UPCOMING,
+            aggregate_id=asset.id,
+            ref_date=maintenance_date,
+        ),
         payload={
             "data": {
                 "id": str(asset.id),
                 "name": asset.name,
                 "serial_number": asset.serial_number,
-                "asset_type": {
-                    "name": asset.asset_type.name,
-                },
+                "asset_type": {"name": asset.asset_type.name},
                 "status": asset.status,
                 "location": asset.location,
                 "description": asset.description,
@@ -115,7 +108,7 @@ def _publish_upcoming_notification(
                 "recommended_maintenance_interval_days": (
                     asset.recommended_maintenance_interval_days
                 ),
-                "next_maintenance_date": (maintenance_date.isoformat()),
+                "next_maintenance_date": maintenance_date.isoformat(),
                 "days_left": days_left,
                 "supervisor": {
                     "email": asset.supervisor.email,
@@ -128,25 +121,26 @@ def _publish_upcoming_notification(
     )
 
 
-def _publish_overdue_notification(
-    *,
-    asset: Asset,
-    maintenance_date,
-    days_overdue: int,
+def _publish_maintenance_overdue(
+    *, asset: Asset, maintenance_date, days_overdue: int
 ) -> bool:
-
-    return _create_outbox_event(
-        asset=asset,
-        event_type=EVENT_OVERDUE,
-        maintenance_date=maintenance_date,
+    return _try_create_outbox_event(
+        tenant_id=asset.tenant_id,
+        event_type=EVENT_MAINTENANCE_OVERDUE,
+        aggregate_type=ASSET_AGGREGATE_TYPE,
+        aggregate_id=asset.id,
+        source_service=ASSET_SOURCE_SERVICE,
+        idempotency_key=_build_idempotency_key(
+            event_type=EVENT_MAINTENANCE_OVERDUE,
+            aggregate_id=asset.id,
+            ref_date=maintenance_date,
+        ),
         payload={
             "data": {
                 "id": str(asset.id),
                 "name": asset.name,
                 "serial_number": asset.serial_number,
-                "asset_type": {
-                    "name": asset.asset_type.name,
-                },
+                "asset_type": {"name": asset.asset_type.name},
                 "status": asset.status,
                 "location": asset.location,
                 "description": asset.description,
@@ -163,7 +157,7 @@ def _publish_overdue_notification(
                 "recommended_maintenance_interval_days": (
                     asset.recommended_maintenance_interval_days
                 ),
-                "next_maintenance_date": (maintenance_date.isoformat()),
+                "next_maintenance_date": maintenance_date.isoformat(),
                 "days_overdue": days_overdue,
                 "supervisor": {
                     "email": asset.supervisor.email,
@@ -177,10 +171,8 @@ def _publish_overdue_notification(
 
 
 def check_maintenance_dates():
-
     today = timezone.now().date()
-
-    warning_cutoff = today + timedelta(days=MAINTENANCE_WARNING_DAYS)
+    warning_cutoff = today + timedelta(days=WARNING_DAYS)
 
     assets = (
         Asset.objects.not_deleted()
@@ -193,36 +185,28 @@ def check_maintenance_dates():
     skipped_count = 0
 
     for asset in assets.iterator(chunk_size=1000):
-
         maintenance_date = asset.next_maintenance_date
 
         try:
-
             if maintenance_date < today:
-
                 days_overdue = (today - maintenance_date).days
-
-                created = _publish_overdue_notification(
+                created = _publish_maintenance_overdue(
                     asset=asset,
                     maintenance_date=maintenance_date,
                     days_overdue=days_overdue,
                 )
-
                 if created:
                     overdue_count += 1
                 else:
                     skipped_count += 1
 
             elif maintenance_date <= warning_cutoff:
-
                 days_left = (maintenance_date - today).days
-
-                created = _publish_upcoming_notification(
+                created = _publish_maintenance_upcoming(
                     asset=asset,
                     maintenance_date=maintenance_date,
                     days_left=days_left,
                 )
-
                 if created:
                     upcoming_count += 1
                 else:
@@ -233,45 +217,181 @@ def check_maintenance_dates():
 
         except Exception:
             logger.exception(
-                ("Failed to process maintenance " "notification asset_id=%s"),
+                "Failed to process maintenance notification asset_id=%s",
                 asset.id,
             )
 
     logger.info(
-        ("Maintenance check complete " "upcoming=%d overdue=%d skipped=%d"),
+        "Maintenance check complete upcoming=%d overdue=%d skipped=%d",
         upcoming_count,
         overdue_count,
         skipped_count,
     )
 
-    return (
+    return upcoming_count, overdue_count, skipped_count
+
+
+def _wo_payload(*, work_order: WorkOrder, extra: dict) -> dict:
+    asset = work_order.asset
+    assigned_to = work_order.assigned_to
+    return {
+        "data": {
+            "id": str(work_order.id),
+            "title": work_order.title,
+            "status": work_order.status,
+            "priority": work_order.priority,
+            "due_date": (
+                work_order.due_date.isoformat() if work_order.due_date else None
+            ),
+            "scheduled_date": (
+                work_order.scheduled_date.isoformat()
+                if work_order.scheduled_date
+                else None
+            ),
+            "description": work_order.description,
+            "notes": work_order.notes,
+            "asset": {
+                "id": str(asset.id),
+                "name": asset.name,
+                "serial_number": asset.serial_number,
+                "location": asset.location,
+            },
+            "assigned_to": {
+                "id": str(assigned_to.id),
+                "email": assigned_to.email,
+                "name": assigned_to.name,
+            },
+            "created_at": work_order.created_at.isoformat(),
+            "updated_at": work_order.updated_at.isoformat(),
+            **extra,
+        },
+    }
+
+
+def _publish_wo_due_upcoming(
+    *, work_order: WorkOrder, days_left: int
+) -> bool:
+    return _try_create_outbox_event(
+        tenant_id=work_order.tenant_id,
+        event_type=EVENT_WO_DUE_UPCOMING,
+        aggregate_type=WO_AGGREGATE_TYPE,
+        aggregate_id=work_order.id,
+        source_service=WO_SOURCE_SERVICE,
+        idempotency_key=_build_idempotency_key(
+            event_type=EVENT_WO_DUE_UPCOMING,
+            aggregate_id=work_order.id,
+            ref_date=work_order.due_date,
+        ),
+        payload=_wo_payload(
+            work_order=work_order, extra={"days_left": days_left}
+        ),
+    )
+
+
+def _publish_wo_due_overdue(
+    *, work_order: WorkOrder, days_overdue: int
+) -> bool:
+    return _try_create_outbox_event(
+        tenant_id=work_order.tenant_id,
+        event_type=EVENT_WO_DUE_OVERDUE,
+        aggregate_type=WO_AGGREGATE_TYPE,
+        aggregate_id=work_order.id,
+        source_service=WO_SOURCE_SERVICE,
+        idempotency_key=_build_idempotency_key(
+            event_type=EVENT_WO_DUE_OVERDUE,
+            aggregate_id=work_order.id,
+            ref_date=work_order.due_date,
+        ),
+        payload=_wo_payload(
+            work_order=work_order, extra={"days_overdue": days_overdue}
+        ),
+    )
+
+
+def check_work_order_due_dates():
+    today = timezone.now().date()
+    warning_cutoff = today + timedelta(days=WARNING_DAYS)
+
+    work_orders = (
+        WorkOrder.objects.not_deleted()
+        .select_related("asset", "assigned_to")
+        .filter(
+            status__in=_WO_ACTIVE_STATUSES,
+            due_date__isnull=False,
+            due_date__lte=warning_cutoff,
+        )
+    )
+
+    upcoming_count = 0
+    overdue_count = 0
+    skipped_count = 0
+
+    for wo in work_orders.iterator(chunk_size=1000):
+        try:
+            if wo.due_date < today:
+                days_overdue = (today - wo.due_date).days
+                created = _publish_wo_due_overdue(
+                    work_order=wo, days_overdue=days_overdue
+                )
+                if created:
+                    overdue_count += 1
+                else:
+                    skipped_count += 1
+
+            else:
+                days_left = (wo.due_date - today).days
+                created = _publish_wo_due_upcoming(
+                    work_order=wo, days_left=days_left
+                )
+                if created:
+                    upcoming_count += 1
+                else:
+                    skipped_count += 1
+
+        except Exception:
+            logger.exception(
+                "Failed to process due-date notification work_order_id=%s",
+                wo.id,
+            )
+
+    logger.info(
+        "Work order due-date check complete "
+        "upcoming=%d overdue=%d skipped=%d",
         upcoming_count,
         overdue_count,
         skipped_count,
     )
+
+    return upcoming_count, overdue_count, skipped_count
 
 
 class Command(BaseCommand):
 
     help = (
-        "Checks assets with upcoming or overdue "
-        "maintenance dates and publishes "
-        "transactional outbox events."
+        "Checks assets with upcoming or overdue maintenance dates and "
+        "work orders with upcoming or overdue due dates, then publishes "
+        "transactional outbox events for each."
     )
 
     def handle(self, *args, **kwargs):
+        self.stdout.write("Starting maintenance and due-date check...")
 
-        self.stdout.write("Starting maintenance notification check...")
-
-        upcoming, overdue, skipped = check_maintenance_dates()
+        m_upcoming, m_overdue, m_skipped = check_maintenance_dates()
+        wo_upcoming, wo_overdue, wo_skipped = check_work_order_due_dates()
 
         self.stdout.write(
             self.style.SUCCESS(
-                (
-                    "Maintenance check complete "
-                    f"upcoming={upcoming} "
-                    f"overdue={overdue} "
-                    f"skipped={skipped}"
-                )
+                "Asset maintenance — "
+                f"upcoming={m_upcoming} "
+                f"overdue={m_overdue} "
+                f"skipped={m_skipped}"
+            )
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Work order due dates — "
+                f"upcoming={wo_upcoming} "
+                f"overdue={wo_overdue} "
+                f"skipped={wo_skipped}"
             )
         )

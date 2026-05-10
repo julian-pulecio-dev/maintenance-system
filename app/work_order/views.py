@@ -1,6 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,6 +24,79 @@ from .services import (
 User = get_user_model()
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="List work orders",
+        description=(
+            "Returns all non-deleted work orders for the current tenant, "
+            "ordered by creation date (newest first).\n\n"
+            "**Query parameters:**\n"
+            "- `status` — Filter by status value: `open`, `in_progress`, "
+            "`on_hold`, `completed`, `cancelled`.\n"
+            "- `priority` — Filter by priority: `low`, `medium`, `high`, "
+            "`critical`.\n"
+            "- `asset` — Filter by asset UUID.\n"
+            "- `assigned_to` — Filter by assigned user UUID.\n\n"
+            "**Errors:**\n"
+            "- `401` — Missing or invalid JWT token.\n"
+            "- `403` — Missing `X-Tenant-ID` header."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                description="Filter by work order status.",
+                required=False,
+                type=str,
+                enum=["open", "in_progress", "on_hold", "completed", "cancelled"],
+            ),
+            OpenApiParameter(
+                name="priority",
+                description="Filter by priority.",
+                required=False,
+                type=str,
+                enum=["low", "medium", "high", "critical"],
+            ),
+            OpenApiParameter(
+                name="asset",
+                description="Filter by asset UUID.",
+                required=False,
+                type=str,
+            ),
+            OpenApiParameter(
+                name="assigned_to",
+                description="Filter by assigned user UUID.",
+                required=False,
+                type=str,
+            ),
+        ],
+    ),
+    create=extend_schema(
+        summary="Create a work order",
+        description=(
+            "Creates a new work order under the current tenant. "
+            "`created_by` is set automatically from the authenticated user "
+            "and cannot be overridden.\n\n"
+            "**Required fields:**\n"
+            "- `asset` — UUID of an asset belonging to this tenant.\n"
+            "- `work_order_type` — UUID of a work order type belonging to "
+            "this tenant.\n"
+            "- `assigned_to` — UUID of a user belonging to this tenant.\n"
+            "- `title` — Short description of the work to be done.\n"
+            "- `priority` — One of `low`, `medium`, `high`, `critical`.\n\n"
+            "**Optional fields:**\n"
+            "- `description` — Extended description.\n"
+            "- `scheduled_date` — Planned start date.\n"
+            "- `due_date` — Must be on or after `scheduled_date`.\n"
+            "- `notes` — Initial notes.\n"
+            "- `estimated_hours` — Estimated duration in hours.\n\n"
+            "**Errors:**\n"
+            "- `400` — Validation error (e.g., asset belongs to another "
+            "tenant, `due_date` before `scheduled_date`).\n"
+            "- `401` — Missing or invalid JWT token.\n"
+            "- `403` — Missing `X-Tenant-ID` header."
+        ),
+    ),
+)
 class WorkOrderListCreateView(generics.ListCreateAPIView):
     serializer_class = WorkOrderSerializer
     authentication_classes = [JWTAuthentication]
@@ -62,6 +141,59 @@ class WorkOrderListCreateView(generics.ListCreateAPIView):
         serializer.instance = work_order
 
 
+@extend_schema_view(
+    retrieve=extend_schema(
+        summary="Retrieve a work order",
+        description=(
+            "Returns the full detail of a single work order, including "
+            "nested representations of the asset, work order type, "
+            "assigned user, and creating user.\n\n"
+            "**Errors:**\n"
+            "- `401` — Missing or invalid JWT token.\n"
+            "- `403` — Missing `X-Tenant-ID` header.\n"
+            "- `404` — Work order not found or belongs to a different tenant."
+        ),
+    ),
+    partial_update=extend_schema(
+        summary="Partially update a work order",
+        description=(
+            "Updates one or more editable fields of a work order. "
+            "All fields are optional — only sent fields are modified.\n\n"
+            "**Editable fields:** `title`, `description`, `priority`, "
+            "`asset`, `work_order_type`, `assigned_to`, `scheduled_date`, "
+            "`due_date`, `estimated_hours`.\n\n"
+            "**Read-only fields (ignored if sent):** `status`, "
+            "`completed_date`, `created_by`, `created_at`, `updated_at`.\n\n"
+            "Use the dedicated action endpoints (`/start`, `/hold`, "
+            "`/complete`, `/cancel`) to change `status`.\n\n"
+            "**Errors:**\n"
+            "- `400` — Validation error (e.g., `due_date` before "
+            "`scheduled_date`, cross-tenant relation).\n"
+            "- `401` — Missing or invalid JWT token.\n"
+            "- `403` — Missing `X-Tenant-ID` header.\n"
+            "- `404` — Work order not found or belongs to a different tenant."
+        ),
+    ),
+    destroy=extend_schema(
+        summary="Soft-delete a work order",
+        description=(
+            "Marks the work order as deleted by setting `deleted_at` to the "
+            "current timestamp. The record is preserved in the database and "
+            "can be restored via `POST /{id}/restore/`.\n\n"
+            "Deleted work orders no longer appear in list or detail "
+            "responses until restored.\n\n"
+            "**Errors:**\n"
+            "- `401` — Missing or invalid JWT token.\n"
+            "- `403` — Missing `X-Tenant-ID` header.\n"
+            "- `404` — Work order not found or belongs to a different tenant.\n"
+            "- `409` — Work order is already deleted."
+        ),
+        responses={
+            204: OpenApiResponse(description="Work order soft-deleted."),
+            409: OpenApiResponse(description="Work order already deleted."),
+        },
+    ),
+)
 class WorkOrderDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = WorkOrderSerializer
     authentication_classes = [JWTAuthentication]
@@ -182,7 +314,26 @@ _complete_schema = inline_serializer(
 )
 
 
-@extend_schema(request=_notes_schema, responses=WorkOrderSerializer)
+@extend_schema(
+    request=_notes_schema,
+    responses={200: WorkOrderSerializer},
+    summary="Restore a soft-deleted work order",
+    description=(
+        "Removes the `deleted_at` timestamp, making the work order visible "
+        "again in list and detail endpoints. The status is not changed — "
+        "the work order returns to whichever status it had before deletion.\n\n"
+        "**Required fields:**\n"
+        "- `notes` — Reason for the restoration. Appended to the work "
+        "order's notes history with a UTC timestamp.\n\n"
+        "**Errors:**\n"
+        "- `400` — `notes` not provided, or work order is not currently "
+        "deleted.\n"
+        "- `401` — Missing or invalid JWT token.\n"
+        "- `403` — Missing `X-Tenant-ID` header.\n"
+        "- `404` — Work order not found or belongs to a different tenant.\n"
+        "- `409` — The related asset is also deleted; restore the asset first."
+    ),
+)
 class WorkOrderRestoreView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
@@ -229,7 +380,27 @@ class WorkOrderRestoreView(APIView):
         )
 
 
-@extend_schema(request=_notes_schema, responses=WorkOrderSerializer)
+@extend_schema(
+    request=_notes_schema,
+    responses={200: WorkOrderSerializer},
+    summary="Start a work order",
+    description=(
+        "Transitions the work order from `open` or `on_hold` to "
+        "`in_progress`.\n\n"
+        "**Required fields:**\n"
+        "- `notes` — Reason for starting. Prepended to the notes history "
+        "with a UTC timestamp.\n\n"
+        "**Valid source statuses:** `open`, `on_hold`.\n\n"
+        "**Errors:**\n"
+        "- `400` — `notes` not provided.\n"
+        "- `401` — Missing or invalid JWT token.\n"
+        "- `403` — Missing `X-Tenant-ID` header.\n"
+        "- `404` — Work order not found, deleted, or belongs to a different "
+        "tenant.\n"
+        "- `409` — Current status does not allow transitioning to "
+        "`in_progress` (e.g., already completed or cancelled)."
+    ),
+)
 class WorkOrderStartView(_WorkOrderActionView):
     target_status = WorkOrder.WorkOrderStatus.IN_PROGRESS
 
@@ -247,7 +418,27 @@ class WorkOrderStartView(_WorkOrderActionView):
         )
 
 
-@extend_schema(request=_notes_schema, responses=WorkOrderSerializer)
+@extend_schema(
+    request=_notes_schema,
+    responses={200: WorkOrderSerializer},
+    summary="Put a work order on hold",
+    description=(
+        "Transitions the work order to `on_hold`, pausing active work "
+        "without cancelling it.\n\n"
+        "**Required fields:**\n"
+        "- `notes` — Reason for the hold (e.g., waiting for parts). "
+        "Prepended to the notes history with a UTC timestamp.\n\n"
+        "**Valid source statuses:** `open`, `in_progress`.\n\n"
+        "**Errors:**\n"
+        "- `400` — `notes` not provided.\n"
+        "- `401` — Missing or invalid JWT token.\n"
+        "- `403` — Missing `X-Tenant-ID` header.\n"
+        "- `404` — Work order not found, deleted, or belongs to a different "
+        "tenant.\n"
+        "- `409` — Current status does not allow transitioning to `on_hold` "
+        "(e.g., already completed or cancelled)."
+    ),
+)
 class WorkOrderHoldView(_WorkOrderActionView):
     target_status = WorkOrder.WorkOrderStatus.ON_HOLD
 
@@ -268,7 +459,34 @@ class WorkOrderHoldView(_WorkOrderActionView):
         )
 
 
-@extend_schema(request=_complete_schema, responses=WorkOrderSerializer)
+@extend_schema(
+    request=_complete_schema,
+    responses={200: WorkOrderSerializer},
+    summary="Complete a work order",
+    description=(
+        "Transitions the work order from `in_progress` to `completed`. "
+        "Also updates `asset.last_maintenance_date` to today's date in "
+        "the same atomic transaction.\n\n"
+        "**Required fields:**\n"
+        "- `notes` — Summary of the work performed. Prepended to the notes "
+        "history with a UTC timestamp.\n"
+        "- `estimated_hours` — Total hours spent (decimal, e.g., `3.5`). "
+        "Stored on the work order as `estimated_hours`.\n\n"
+        "**Side effects on success:**\n"
+        "- `status` → `completed`.\n"
+        "- `completed_date` → today (UTC).\n"
+        "- `asset.last_maintenance_date` → today (UTC).\n\n"
+        "**Valid source statuses:** `in_progress`.\n\n"
+        "**Errors:**\n"
+        "- `400` — `notes` or `estimated_hours` not provided.\n"
+        "- `401` — Missing or invalid JWT token.\n"
+        "- `403` — Missing `X-Tenant-ID` header.\n"
+        "- `404` — Work order not found, deleted, or belongs to a different "
+        "tenant.\n"
+        "- `409` — Current status does not allow completion (only "
+        "`in_progress` can be completed)."
+    ),
+)
 class WorkOrderCompleteView(_WorkOrderActionView):
     target_status = WorkOrder.WorkOrderStatus.COMPLETED
 
@@ -296,7 +514,27 @@ class WorkOrderCompleteView(_WorkOrderActionView):
         )
 
 
-@extend_schema(request=_notes_schema, responses=WorkOrderSerializer)
+@extend_schema(
+    request=_notes_schema,
+    responses={200: WorkOrderSerializer},
+    summary="Cancel a work order",
+    description=(
+        "Transitions the work order to `cancelled`. This is a terminal "
+        "state — a cancelled work order cannot be reactivated through "
+        "status transitions. It can be soft-deleted and restored if needed.\n\n"
+        "**Required fields:**\n"
+        "- `notes` — Reason for cancellation. Prepended to the notes "
+        "history with a UTC timestamp.\n\n"
+        "**Valid source statuses:** `open`, `in_progress`, `on_hold`.\n\n"
+        "**Errors:**\n"
+        "- `400` — `notes` not provided.\n"
+        "- `401` — Missing or invalid JWT token.\n"
+        "- `403` — Missing `X-Tenant-ID` header.\n"
+        "- `404` — Work order not found, deleted, or belongs to a different "
+        "tenant.\n"
+        "- `409` — Work order is already completed or cancelled."
+    ),
+)
 class WorkOrderCancelView(_WorkOrderActionView):
     target_status = WorkOrder.WorkOrderStatus.CANCELLED
 
@@ -317,10 +555,32 @@ class WorkOrderCancelView(_WorkOrderActionView):
         )
 
 
-@extend_schema(request=_assign_schema, responses=WorkOrderSerializer)
+@extend_schema(
+    request=_assign_schema,
+    responses={200: WorkOrderSerializer},
+    summary="Reassign a work order",
+    description=(
+        "Changes the `assigned_to` user on a work order. The new user must "
+        "belong to the same tenant. Assignment is only allowed while the "
+        "work order is active (not completed or cancelled).\n\n"
+        "**Required fields:**\n"
+        "- `assigned_to` — UUID of the user to assign. Must belong to the "
+        "current tenant.\n"
+        "- `notes` — Reason for the reassignment. Prepended to the notes "
+        "history with a UTC timestamp.\n\n"
+        "**Assignable statuses:** `open`, `in_progress`, `on_hold`.\n\n"
+        "**Errors:**\n"
+        "- `400` — `assigned_to` or `notes` not provided, user UUID not "
+        "found, or user belongs to a different tenant.\n"
+        "- `401` — Missing or invalid JWT token.\n"
+        "- `403` — Missing `X-Tenant-ID` header.\n"
+        "- `404` — Work order not found, deleted, or belongs to a different "
+        "tenant.\n"
+        "- `409` — Work order is completed or cancelled and cannot be "
+        "reassigned."
+    ),
+)
 class WorkOrderAssignView(_WorkOrderActionView):
-    # assign is not a status transition — reuse _check_transition
-    # by treating it as "must not be completed or cancelled"
     _ASSIGNABLE_STATUSES = {
         WorkOrder.WorkOrderStatus.OPEN,
         WorkOrder.WorkOrderStatus.IN_PROGRESS,

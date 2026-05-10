@@ -90,7 +90,6 @@ module "asset_email_notifier_worker" {
   sns_topic_arn      = module.sns_outbox_observer.topic_arn
   filter_event_types = ["asset.created", "asset.updated", "asset.deleted"]
   source_dir         = "${path.root}/../lambdas/asset_email_notifier"
-  shared_dir         = "${path.root}/../lambdas/shared"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
@@ -113,7 +112,6 @@ module "work_order_email_notifier_worker" {
                         "work_order.restored",
                         ]
   source_dir         = "${path.root}/../lambdas/work_order_email_notifier"
-  shared_dir         = "${path.root}/../lambdas/shared"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
@@ -126,7 +124,30 @@ module "asset_maintenance_email_notifier_worker" {
   sns_topic_arn      = module.sns_outbox_observer.topic_arn
   filter_event_types = ["asset.maintenance.upcoming", "asset.maintenance.overdue"]
   source_dir         = "${path.root}/../lambdas/asset_maintenance_email_notifier"
-  shared_dir         = "${path.root}/../lambdas/shared"
+
+  sqs_results_queue_url = module.sqs_outbox_results.queue_url
+  sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  ses_from_email        = var.email_default_from
+}
+
+module "asset_sensor_alert_notifier_worker" {
+  source             = "./modules/sns_subscriber"
+  name               = "${var.name}-asset-sensor-alert-notifier"
+  sns_topic_arn      = module.sns_outbox_observer.topic_arn
+  filter_event_types = ["asset.sensor_alert"]
+  source_dir         = "${path.root}/../lambdas/asset_sensor_alert_notifier"
+
+  sqs_results_queue_url = module.sqs_outbox_results.queue_url
+  sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  ses_from_email        = var.email_default_from
+}
+
+module "work_order_due_date_notifier_worker" {
+  source             = "./modules/sns_subscriber"
+  name               = "${var.name}-wo-due-date-notifier"
+  sns_topic_arn      = module.sns_outbox_observer.topic_arn
+  filter_event_types = ["work_order.due_date.upcoming", "work_order.due_date.overdue"]
+  source_dir         = "${path.root}/../lambdas/work_order_due_date_notifier"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn

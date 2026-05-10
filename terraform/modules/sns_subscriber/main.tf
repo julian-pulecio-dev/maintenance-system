@@ -30,7 +30,7 @@ data "archive_file" "lambda" {
     filename = "handler.py"
   }
   source {
-    content  = file("${var.shared_dir}/notifier_base.py")
+    content  = file("${var.source_dir}/../notifier_base.py")
     filename = "notifier_base.py"
   }
   output_path = "${path.module}/builds/${var.name}.zip"

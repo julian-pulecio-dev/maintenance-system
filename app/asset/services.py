@@ -199,6 +199,21 @@ class AssetService:
         return asset
 
     @staticmethod
+    def report_sensor_alert(
+        *, asset: Asset, alert_data: Dict[str, Any]
+    ) -> OutboxEvent:
+        payload = _build_payload(asset)
+        payload["data"]["alert"] = alert_data
+        return OutboxEvent.objects.create(
+            tenant=asset.tenant,
+            event_type="asset.sensor_alert",
+            aggregate_type="asset",
+            aggregate_id=asset.id,
+            payload=payload,
+            source_service="asset",
+        )
+
+    @staticmethod
     @transaction.atomic
     def restore_asset(*, asset: Asset) -> Asset:
         # select_for_update() prevents race conditions between workers

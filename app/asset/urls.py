@@ -4,6 +4,7 @@ from .views import (
     AssetDetailView,
     AssetListCreateView,
     AssetRestoreView,
+    AssetSensorAlertView,
     AssetSupervisorView,
 )
 
@@ -17,5 +18,10 @@ urlpatterns = [
         "<uuid:pk>/supervisor/",
         AssetSupervisorView.as_view(),
         name="supervisor",
+    ),
+    path(
+        "<uuid:pk>/sensor-alert/",
+        AssetSensorAlertView.as_view(),
+        name="sensor-alert",
     ),
 ]
