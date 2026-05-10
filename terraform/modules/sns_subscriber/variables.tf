@@ -18,6 +18,11 @@ variable "source_dir" {
   type        = string
 }
 
+variable "shared_dir" {
+  description = "Absolute path to the shared Lambda utilities directory (bundled into the zip alongside the handler)"
+  type        = string
+}
+
 variable "lambda_handler" {
   description = "Lambda handler in the format file.function (e.g. 'handler.handle')"
   type        = string

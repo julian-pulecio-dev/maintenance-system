@@ -179,8 +179,12 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 AWS_SES_REGION_NAME = os.environ.get("AWS_SES_REGION_NAME", "us-east-1")
 AWS_SES_REGION_ENDPOINT = f"email.{AWS_SES_REGION_NAME}.amazonaws.com"
 
+_cors_extra = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:5173",
+    *(_cors_extra.split(",") if _cors_extra else []),
 ]
 
 REST_FRAMEWORK = {
