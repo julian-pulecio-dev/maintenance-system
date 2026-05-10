@@ -54,6 +54,24 @@ resource "aws_iam_role_policy_attachment" "sqs_results_publish_attach" {
   policy_arn = aws_iam_policy.sqs_results_publish[0].arn
 }
 
+resource "aws_iam_policy" "dynamodb_idempotency" {
+  name = "${var.name}-dynamodb-idempotency"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["dynamodb:PutItem", "dynamodb:GetItem"]
+      Resource = [var.dynamodb_table_arn]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "dynamodb_idempotency_attach" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = aws_iam_policy.dynamodb_idempotency.arn
+}
+
 resource "aws_iam_policy" "ses_send" {
   count = var.ses_enabled ? 1 : 0
   name  = "${var.name}-ses-send"

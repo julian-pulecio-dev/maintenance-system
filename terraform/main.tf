@@ -100,7 +100,7 @@ module "asset_maintenance_email_notifier_worker" {
   source             = "./modules/sns_subscriber"
   name               = "${var.name}-maintenance-email-notifier-worker"
   sns_topic_arn      = module.sns_outbox_observer.topic_arn
-  filter_event_types = ["maintenance_due"]
+  filter_event_types = ["asset.maintenance.upcoming", "asset.maintenance.overdue"]
   source_dir         = "${path.root}/../lambdas/asset_maintenance_email_notifier"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url

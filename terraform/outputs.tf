@@ -6,6 +6,14 @@ output "ecs_service_name" {
   value = module.ecs_django_core.ecs_service_name
 }
 
+output "outbox_cluster_name" {
+  value = module.ecs_outbox_observer.cluster_name
+}
+
+output "outbox_service_name" {
+  value = module.ecs_outbox_observer.service_name
+}
+
 output "migration_task_definition" {
   value = module.ecs_django_core.migration_task_definition
 }

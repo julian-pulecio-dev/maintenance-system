@@ -18,3 +18,8 @@ variable "ses_enabled" {
   type        = bool
   default     = false
 }
+
+variable "dynamodb_table_arn" {
+  description = "ARN of the DynamoDB idempotency table (grants PutItem and GetItem)."
+  type        = string
+}

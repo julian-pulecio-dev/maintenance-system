@@ -3,7 +3,24 @@ locals {
     var.environment_variables,
     var.sqs_results_queue_url != null ? { SQS_RESULTS_URL = var.sqs_results_queue_url } : {},
     var.ses_from_email != null ? { SES_FROM_EMAIL = var.ses_from_email } : {},
+    { IDEMPOTENCY_TABLE_NAME = aws_dynamodb_table.idempotency.name },
   )
+}
+
+resource "aws_dynamodb_table" "idempotency" {
+  name         = "${var.name}-idempotency"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "idempotency_key"
+
+  attribute {
+    name = "idempotency_key"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
 }
 
 data "archive_file" "lambda" {
@@ -68,6 +85,7 @@ module "iam_role" {
   sqs_queue_arn         = aws_sqs_queue.main.arn
   sqs_results_queue_arn = var.sqs_results_queue_arn
   ses_enabled           = var.ses_from_email != null
+  dynamodb_table_arn    = aws_dynamodb_table.idempotency.arn
 }
 
 resource "aws_lambda_function" "this" {
