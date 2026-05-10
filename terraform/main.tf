@@ -72,12 +72,36 @@ module "ecs_django_core" {
   desired_count          = var.ecs_desired_count
 }
 
-module "email_notifier_worker" {
+module "ecs_maintenance_checker" {
+  source                 = "./modules/ecs_maintenance_checker"
+  name                   = "${var.name}-ecs"
+  db_name                = var.db_name
+  db_user_secret_arn     = data.aws_secretsmanager_secret.db_user.arn
+  db_password_secret_arn = data.aws_secretsmanager_secret.db_password.arn
+  db_host                = module.rds.database_host
+  db_port                = module.rds.database_port
+  subnet_ids             = module.vpc.subnet_ids
+  security_group_id      = module.vpc.security_group_id
+}
+
+module "asset_email_notifier_worker" {
   source             = "./modules/sns_subscriber"
   name               = "${var.name}-email-notifier-worker"
   sns_topic_arn      = module.sns_outbox_observer.topic_arn
   filter_event_types = ["asset.created", "asset.updated", "asset.deleted"]
   source_dir         = "${path.root}/../lambdas/asset_email_notifier"
+
+  sqs_results_queue_url = module.sqs_outbox_results.queue_url
+  sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  ses_from_email        = var.email_default_from
+}
+
+module "asset_maintenance_email_notifier_worker" {
+  source             = "./modules/sns_subscriber"
+  name               = "${var.name}-maintenance-email-notifier-worker"
+  sns_topic_arn      = module.sns_outbox_observer.topic_arn
+  filter_event_types = ["maintenance_due"]
+  source_dir         = "${path.root}/../lambdas/asset_maintenance_email_notifier"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
