@@ -1,14 +1,17 @@
 import json
 import logging
 import os
+import time
 
 import boto3
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 _sqs_client = None
 _ses_client = None
+_dynamodb_client = None
 
 
 def _get_sqs_client():
@@ -23,6 +26,32 @@ def _get_ses_client():
     if _ses_client is None:
         _ses_client = boto3.client("ses")
     return _ses_client
+
+
+def _get_dynamodb_client():
+    global _dynamodb_client
+    if _dynamodb_client is None:
+        _dynamodb_client = boto3.client("dynamodb")
+    return _dynamodb_client
+
+
+def _mark_processed(idempotency_key: str) -> bool:
+    """Atomically claims the key. Returns True if first time, False if duplicate."""
+    ttl = int(time.time()) + 30 * 24 * 60 * 60  # 30 days
+    try:
+        _get_dynamodb_client().put_item(
+            TableName=os.environ["IDEMPOTENCY_TABLE_NAME"],
+            Item={
+                "idempotency_key": {"S": idempotency_key},
+                "expires_at": {"N": str(ttl)},
+            },
+            ConditionExpression="attribute_not_exists(idempotency_key)",
+        )
+        return True
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return False
+        raise
 
 
 def _send_result(event_id: str, *, status: str, error: str = None):
@@ -105,10 +134,9 @@ def handle(event, context):
                 body = json.loads(message)
 
             event_id = body.get("id")
+            idempotency_key = body.get("idempotency_key") or event_id
             event_type = body.get("event_type", "")
             data = body.get("payload", {}).get("data", {})
-
-            supervisor_email = (data.get("supervisor") or {}).get("email")
 
             logger.info(
                 "Processing event id=%s type=%s tenant=%s asset_id=%s",
@@ -118,9 +146,22 @@ def handle(event, context):
                 data.get("id"),
             )
 
+            if not _mark_processed(idempotency_key):
+                logger.info(
+                    "Duplicate event skipped idempotency_key=%s event_id=%s",
+                    idempotency_key,
+                    event_id,
+                )
+                if event_id:
+                    _send_result(event_id, status="processed")
+                continue
+
+            supervisor_email = (data.get("supervisor") or {}).get("email")
+
             if not supervisor_email:
                 logger.warning(
-                    "No supervisor email in event_id=%s, skipping email.", event_id
+                    "No supervisor email in event_id=%s, skipping email.",
+                    event_id,
                 )
             else:
                 _send_email(to=supervisor_email, data=data, event_type=event_type)
