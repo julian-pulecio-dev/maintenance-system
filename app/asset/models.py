@@ -102,8 +102,6 @@ class Asset(models.Model):
 
     serial_number = models.CharField(
         max_length=255,
-        null=True,
-        blank=True,
         db_index=True,
         help_text="Manufacturer serial number (unique per tenant)",
     )
@@ -186,10 +184,7 @@ class Asset(models.Model):
             ),
             models.UniqueConstraint(
                 fields=["tenant", "serial_number"],
-                condition=Q(
-                    deleted_at__isnull=True,
-                    serial_number__isnull=False,
-                ),
+                condition=Q(deleted_at__isnull=True),
                 name="uq_tenant_active_serial_number",
             ),
         ]

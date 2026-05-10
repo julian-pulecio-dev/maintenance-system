@@ -73,6 +73,10 @@ class AssetSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         tenant = self.context["request"].tenant
+
+        if not self.instance and not data.get("last_maintenance_date"):
+            data["last_maintenance_date"] = data.get("installation_date")
+
         if self.instance:
             instance = self.instance
             for key, value in data.items():

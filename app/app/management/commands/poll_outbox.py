@@ -46,10 +46,7 @@ def _get_sqs_client():
 
 def _recover_stuck_processing_events():
 
-    stuck_cutoff = (
-        timezone.now()
-        - timedelta(minutes=STUCK_THRESHOLD_MINUTES)
-    )
+    stuck_cutoff = timezone.now() - timedelta(minutes=STUCK_THRESHOLD_MINUTES)
 
     recovered = (
         OutboxEvent.objects.processing()
@@ -57,18 +54,13 @@ def _recover_stuck_processing_events():
         .update(
             status=OutboxEvent.Status.PENDING,
             last_attempted_at=timezone.now(),
-            error_message=(
-                "Recovered stuck PROCESSING event"
-            ),
+            error_message=("Recovered stuck PROCESSING event"),
         )
     )
 
     if recovered:
         logger.warning(
-            (
-                "Recovered %d stuck PROCESSING "
-                "events"
-            ),
+            ("Recovered %d stuck PROCESSING " "events"),
             recovered,
         )
 
@@ -88,9 +80,7 @@ def _claim_pending_events():
 
         event_ids = [event.id for event in events]
 
-        OutboxEvent.objects.filter(
-            id__in=event_ids
-        ).update(
+        OutboxEvent.objects.filter(id__in=event_ids).update(
             status=OutboxEvent.Status.PROCESSING,
             last_attempted_at=timezone.now(),
         )
@@ -117,12 +107,8 @@ def _publish(event: OutboxEvent):
             "payload": event.payload,
             "event_version": event.event_version,
             "source_service": event.source_service,
-            "idempotency_key": (
-                event.idempotency_key
-            ),
-            "created_at": (
-                event.created_at.isoformat()
-            ),
+            "idempotency_key": (event.idempotency_key),
+            "created_at": (event.created_at.isoformat()),
         }
     )
 
@@ -132,24 +118,17 @@ def _publish(event: OutboxEvent):
         MessageAttributes={
             "event_type": {
                 "DataType": "String",
-                "StringValue": (
-                    event.event_type
-                ),
+                "StringValue": (event.event_type),
             },
             "tenant_id": {
                 "DataType": "String",
-                "StringValue": str(
-                    event.tenant_id
-                ),
+                "StringValue": str(event.tenant_id),
             },
         },
     )
 
     logger.info(
-        (
-            "Outbox event dispatched "
-            "id=%s type=%s"
-        ),
+        ("Outbox event dispatched " "id=%s type=%s"),
         event.id,
         event.event_type,
     )
@@ -180,18 +159,12 @@ def _dispatch_pending_events():
             event.mark_failed(str(exc))
 
             logger.exception(
-                (
-                    "Failed to dispatch "
-                    "event_id=%s"
-                ),
+                ("Failed to dispatch " "event_id=%s"),
                 event.id,
             )
 
     logger.info(
-        (
-            "Dispatch cycle complete "
-            "dispatched=%d failed=%d"
-        ),
+        ("Dispatch cycle complete " "dispatched=%d failed=%d"),
         dispatched,
         failed,
     )
@@ -231,28 +204,20 @@ def _process_results():
 
             try:
 
-                event = (
-                    OutboxEvent.objects
-                    .select_for_update()
-                    .get(id=event_id)
+                event = OutboxEvent.objects.select_for_update().get(
+                    id=event_id
                 )
 
             except OutboxEvent.DoesNotExist:
 
                 logger.error(
-                    (
-                        "Received result for "
-                        "unknown event_id=%s"
-                    ),
+                    ("Received result for " "unknown event_id=%s"),
                     event_id,
                 )
 
                 continue
 
-            if (
-                event.status
-                != OutboxEvent.Status.PROCESSING
-            ):
+            if event.status != OutboxEvent.Status.PROCESSING:
 
                 logger.warning(
                     (
@@ -275,27 +240,18 @@ def _process_results():
             else:
 
                 event.mark_failed(
-                    error
-                    or (
-                        "Unknown downstream "
-                        "processing error"
-                    )
+                    error or ("Unknown downstream " "processing error")
                 )
 
                 failed += 1
 
             sqs.delete_message(
                 QueueUrl=queue_url,
-                ReceiptHandle=message[
-                    "ReceiptHandle"
-                ],
+                ReceiptHandle=message["ReceiptHandle"],
             )
 
             logger.info(
-                (
-                    "Processed result "
-                    "event_id=%s status=%s"
-                ),
+                ("Processed result " "event_id=%s status=%s"),
                 event.id,
                 status,
             )
@@ -303,18 +259,12 @@ def _process_results():
         except Exception:
 
             logger.exception(
-                (
-                    "Failed to process "
-                    "results message_id=%s"
-                ),
+                ("Failed to process " "results message_id=%s"),
                 message.get("MessageId"),
             )
 
     logger.info(
-        (
-            "Results cycle complete "
-            "processed=%d failed=%d"
-        ),
+        ("Results cycle complete " "processed=%d failed=%d"),
         processed,
         failed,
     )
@@ -330,9 +280,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
 
-        self.stdout.write(
-            "Starting outbox dispatcher..."
-        )
+        self.stdout.write("Starting outbox dispatcher...")
 
         stop_event = Event()
 
@@ -358,9 +306,7 @@ class Command(BaseCommand):
 
         except KeyboardInterrupt:
 
-            self.stdout.write(
-                "Shutting down..."
-            )
+            self.stdout.write("Shutting down...")
 
             stop_event.set()
 
@@ -379,13 +325,9 @@ class Command(BaseCommand):
 
             except Exception:
 
-                logger.exception(
-                    "Unhandled dispatcher error"
-                )
+                logger.exception("Unhandled dispatcher error")
 
-            stop_event.wait(
-                timeout=POLL_INTERVAL_SECONDS
-            )
+            stop_event.wait(timeout=POLL_INTERVAL_SECONDS)
 
     def _run_results_processor(
         self,
@@ -400,10 +342,6 @@ class Command(BaseCommand):
 
             except Exception:
 
-                logger.exception(
-                    "Unhandled results error"
-                )
+                logger.exception("Unhandled results error")
 
-            stop_event.wait(
-                timeout=RESULTS_INTERVAL_SECONDS
-            )
+            stop_event.wait(timeout=RESULTS_INTERVAL_SECONDS)

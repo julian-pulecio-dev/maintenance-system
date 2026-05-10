@@ -61,7 +61,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("scheduled_date", models.DateField(blank=True, null=True)),
-                ("due_date", models.DateField(blank=True, db_index=True, null=True)),
+                (
+                    "due_date",
+                    models.DateField(blank=True, db_index=True, null=True),
+                ),
                 ("completed_date", models.DateField(blank=True, null=True)),
                 ("notes", models.TextField(blank=True, null=True)),
                 (

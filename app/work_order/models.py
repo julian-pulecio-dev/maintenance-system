@@ -236,10 +236,7 @@ class WorkOrder(models.Model):
 
         constraints = [
             models.CheckConstraint(
-                check=(
-                    Q(completed_date__isnull=True)
-                    | Q(status="completed")
-                ),
+                check=(Q(completed_date__isnull=True) | Q(status="completed")),
                 name=(
                     "chk_work_order_completed_date_requires_completed_status"
                 ),
@@ -268,17 +265,14 @@ class WorkOrder(models.Model):
             and self.due_date
             and self.due_date < self.scheduled_date
         ):
-            errors["due_date"] = (
-                "Due date cannot be before scheduled date."
-            )
+            errors["due_date"] = "Due date cannot be before scheduled date."
 
         if (
             self.completed_date
             and self.status != self.WorkOrderStatus.COMPLETED
         ):
             errors["completed_date"] = (
-                "Completed date can only be set "
-                "when status is completed."
+                "Completed date can only be set " "when status is completed."
             )
 
         if errors:
@@ -287,21 +281,15 @@ class WorkOrder(models.Model):
     def _validate_tenant_consistency(self):
         errors = {}
 
-        if (
-            self.asset_id
-            and self.asset.tenant_id != self.tenant_id
-        ):
-            errors["asset"] = (
-                "Asset must belong to the same tenant."
-            )
+        if self.asset_id and self.asset.tenant_id != self.tenant_id:
+            errors["asset"] = "Asset must belong to the same tenant."
 
         if (
             self.work_order_type_id
             and self.work_order_type.tenant_id != self.tenant_id
         ):
             errors["work_order_type"] = (
-                "Work order type must belong "
-                "to the same tenant."
+                "Work order type must belong " "to the same tenant."
             )
 
         if (
@@ -309,17 +297,12 @@ class WorkOrder(models.Model):
             and self.assigned_to.tenant_id != self.tenant_id
         ):
             errors["assigned_to"] = (
-                "Assigned user must belong "
-                "to the same tenant."
+                "Assigned user must belong " "to the same tenant."
             )
 
-        if (
-            self.created_by_id
-            and self.created_by.tenant_id != self.tenant_id
-        ):
+        if self.created_by_id and self.created_by.tenant_id != self.tenant_id:
             errors["created_by"] = (
-                "Created by user must belong "
-                "to the same tenant."
+                "Created by user must belong " "to the same tenant."
             )
 
         if errors:
@@ -328,11 +311,7 @@ class WorkOrder(models.Model):
     def _validate_not_deleted(self):
         if self.is_deleted:
             raise ValidationError(
-                {
-                    "non_field_errors": (
-                        "Cannot modify a deleted work order."
-                    )
-                }
+                {"non_field_errors": ("Cannot modify a deleted work order.")}
             )
 
     def _validate_transition(self, target_status):
@@ -360,39 +339,62 @@ class WorkOrder(models.Model):
         """
         super().save(*args, **kwargs)
 
-    def start(self):
+    def _append_note(self, notes: str):
+        timestamp = timezone.now().strftime("%Y-%m-%d %H:%M UTC")
+        new_entry = f"[{timestamp}] {notes}"
+        self.notes = (
+            f"{new_entry}\n---\n{self.notes}" if self.notes else new_entry
+        )
+
+    def start(self, notes: str):
         self._validate_not_deleted()
         self._validate_transition(self.WorkOrderStatus.IN_PROGRESS)
         self.status = self.WorkOrderStatus.IN_PROGRESS
-        # Defensive normalization against corrupted state.
         self.completed_date = None
-        self.save(update_fields=["status", "completed_date", "updated_at"])
+        self._append_note(notes)
+        self.save(
+            update_fields=["status", "completed_date", "notes", "updated_at"]
+        )
 
-    def put_on_hold(self):
+    def put_on_hold(self, notes: str):
         self._validate_not_deleted()
         self._validate_transition(self.WorkOrderStatus.ON_HOLD)
         self.status = self.WorkOrderStatus.ON_HOLD
-        # Defensive normalization against corrupted state.
         self.completed_date = None
-        self.save(update_fields=["status", "completed_date", "updated_at"])
+        self._append_note(notes)
+        self.save(
+            update_fields=["status", "completed_date", "notes", "updated_at"]
+        )
 
-    def complete(self):
+    def complete(self, notes: str, estimated_hours):
         self._validate_not_deleted()
         self._validate_transition(self.WorkOrderStatus.COMPLETED)
         self.status = self.WorkOrderStatus.COMPLETED
         if self.completed_date is None:
             self.completed_date = timezone.now().date()
-        self.save(update_fields=["status", "completed_date", "updated_at"])
+        self.estimated_hours = estimated_hours
+        self._append_note(notes)
+        self.save(
+            update_fields=[
+                "status",
+                "completed_date",
+                "estimated_hours",
+                "notes",
+                "updated_at",
+            ]
+        )
 
-    def cancel(self):
+    def cancel(self, notes: str):
         self._validate_not_deleted()
         self._validate_transition(self.WorkOrderStatus.CANCELLED)
         self.status = self.WorkOrderStatus.CANCELLED
-        # Defensive normalization against corrupted state.
         self.completed_date = None
-        self.save(update_fields=["status", "completed_date", "updated_at"])
+        self._append_note(notes)
+        self.save(
+            update_fields=["status", "completed_date", "notes", "updated_at"]
+        )
 
-    def assign_to(self, user):
+    def assign_to(self, user, notes: str):
         self._validate_not_deleted()
 
         if self.status in (
@@ -412,14 +414,18 @@ class WorkOrder(models.Model):
             raise ValidationError(
                 {
                     "assigned_to": (
-                        "Assigned user must belong "
-                        "to the same tenant."
+                        "Assigned user must belong " "to the same tenant."
                     )
                 }
             )
 
+        timestamp = timezone.now().strftime("%Y-%m-%d %H:%M UTC")
+        new_entry = f"[{timestamp}] {notes}"
+        self.notes = (
+            f"{new_entry}\n---\n{self.notes}" if self.notes else new_entry
+        )
         self.assigned_to = user
-        self.save(update_fields=["assigned_to", "updated_at"])
+        self.save(update_fields=["assigned_to", "notes", "updated_at"])
 
     @property
     def is_deleted(self):
@@ -427,13 +433,10 @@ class WorkOrder(models.Model):
 
     @property
     def is_active(self):
-        return (
-            not self.is_deleted
-            and self.status in (
-                self.WorkOrderStatus.OPEN,
-                self.WorkOrderStatus.IN_PROGRESS,
-                self.WorkOrderStatus.ON_HOLD,
-            )
+        return not self.is_deleted and self.status in (
+            self.WorkOrderStatus.OPEN,
+            self.WorkOrderStatus.IN_PROGRESS,
+            self.WorkOrderStatus.ON_HOLD,
         )
 
     @property
@@ -456,14 +459,11 @@ class WorkOrder(models.Model):
         self.deleted_at = timezone.now()
         self.save(update_fields=["deleted_at", "updated_at"])
 
-    def restore(self):
+    def restore(self, notes: str):
         if not self.is_deleted:
             return
 
-        if (
-            hasattr(self.asset, "is_deleted")
-            and self.asset.is_deleted
-        ):
+        if hasattr(self.asset, "is_deleted") and self.asset.is_deleted:
             raise ValidationError(
                 {
                     "asset": (
@@ -474,21 +474,15 @@ class WorkOrder(models.Model):
             )
 
         self.deleted_at = None
+        self._append_note(notes)
 
         try:
             with transaction.atomic():
-                self.save(update_fields=["deleted_at", "updated_at"])
+                self.save(update_fields=["deleted_at", "notes", "updated_at"])
         except IntegrityError:
             raise ValidationError(
-                {
-                    "non_field_errors": (
-                        "Cannot restore work order."
-                    )
-                }
+                {"non_field_errors": ("Cannot restore work order.")}
             )
 
     def __str__(self):
-        return (
-            f"{self.title} "
-            f"[{self.get_status_display()}]"
-        )
+        return f"{self.title} " f"[{self.get_status_display()}]"
