@@ -12,7 +12,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from tenant.permissions import TenantHeaderRequired
+from tenant.permissions import (
+    IsStaffOrSuperuser,
+    IsStaffOrWorkOrderAssignee,
+    TenantHeaderRequired,
+)
 from .models import WorkOrder
 from .serializers import WorkOrderSerializer
 from .services import (
@@ -47,7 +51,13 @@ User = get_user_model()
                 description="Filter by work order status.",
                 required=False,
                 type=str,
-                enum=["open", "in_progress", "on_hold", "completed", "cancelled"],
+                enum=[
+                    "open",
+                    "in_progress",
+                    "on_hold",
+                    "completed",
+                    "cancelled",
+                ],
             ),
             OpenApiParameter(
                 name="priority",
@@ -100,7 +110,11 @@ User = get_user_model()
 class WorkOrderListCreateView(generics.ListCreateAPIView):
     serializer_class = WorkOrderSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrWorkOrderAssignee,
+        TenantHeaderRequired,
+    ]
 
     def get_queryset(self):
         qs = (
@@ -197,7 +211,11 @@ class WorkOrderListCreateView(generics.ListCreateAPIView):
 class WorkOrderDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = WorkOrderSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrWorkOrderAssignee,
+        TenantHeaderRequired,
+    ]
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
@@ -235,7 +253,11 @@ class WorkOrderDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class _WorkOrderActionView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrWorkOrderAssignee,
+        TenantHeaderRequired,
+    ]
     target_status = None
 
     def _get_active_work_order(self, request, pk):
@@ -336,7 +358,11 @@ _complete_schema = inline_serializer(
 )
 class WorkOrderRestoreView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrSuperuser,
+        TenantHeaderRequired,
+    ]
 
     def post(self, request, pk):
         try:
@@ -408,6 +434,7 @@ class WorkOrderStartView(_WorkOrderActionView):
         work_order = self._get_active_work_order(request, pk)
         if work_order is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, work_order)
         if err := self._check_transition(work_order):
             return err
         notes, err = self._require_notes(request)
@@ -446,6 +473,7 @@ class WorkOrderHoldView(_WorkOrderActionView):
         work_order = self._get_active_work_order(request, pk)
         if work_order is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, work_order)
         if err := self._check_transition(work_order):
             return err
         notes, err = self._require_notes(request)
@@ -494,6 +522,7 @@ class WorkOrderCompleteView(_WorkOrderActionView):
         work_order = self._get_active_work_order(request, pk)
         if work_order is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, work_order)
         if err := self._check_transition(work_order):
             return err
         notes, err = self._require_notes(request)
@@ -542,6 +571,7 @@ class WorkOrderCancelView(_WorkOrderActionView):
         work_order = self._get_active_work_order(request, pk)
         if work_order is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, work_order)
         if err := self._check_transition(work_order):
             return err
         notes, err = self._require_notes(request)
@@ -581,6 +611,12 @@ class WorkOrderCancelView(_WorkOrderActionView):
     ),
 )
 class WorkOrderAssignView(_WorkOrderActionView):
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrSuperuser,
+        TenantHeaderRequired,
+    ]
+
     _ASSIGNABLE_STATUSES = {
         WorkOrder.WorkOrderStatus.OPEN,
         WorkOrder.WorkOrderStatus.IN_PROGRESS,

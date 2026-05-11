@@ -21,6 +21,10 @@ def asset_restore_url(asset_id):
     return reverse("asset:restore", args=[asset_id])
 
 
+def asset_sensor_alert_url(asset_id):
+    return reverse("asset:sensor-alert", args=[asset_id])
+
+
 def create_tenant(name="Test Tenant"):
     return Tenant.objects.create(name=name)
 
@@ -59,7 +63,7 @@ def create_asset(tenant, asset_type, **kwargs):
 class AssetListCreateTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
@@ -174,11 +178,44 @@ class AssetListCreateTests(TestCase):
 
         self.assertEqual(res.status_code, 403)
 
+    def test_non_staff_cannot_create_asset(self):
+        non_staff = create_user(self.tenant, email="nonstaff@example.com")
+        self.client.force_authenticate(non_staff)
+
+        payload = {
+            "name": "New Pump",
+            "asset_type": str(self.asset_type.id),
+            "supervisor": str(non_staff.id),
+            "location": "Building B",
+            "installation_date": "2021-06-01",
+            "recommended_maintenance_interval_days": 60,
+            "metadata": {"spec_version": 1},
+        }
+
+        res = self.client.post(
+            ASSET_LIST_URL,
+            payload,
+            format="json",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+    def test_non_staff_can_list_assets(self):
+        non_staff = create_user(self.tenant, email="nonstaff@example.com")
+        self.client.force_authenticate(non_staff)
+
+        res = self.client.get(
+            ASSET_LIST_URL, HTTP_X_TENANT_ID=str(self.tenant.id)
+        )
+
+        self.assertEqual(res.status_code, 200)
+
 
 class AssetDetailTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type)
         self.client = APIClient()
@@ -237,7 +274,7 @@ class AssetDetailTests(TestCase):
 class AssetRestoreTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type)
         self.asset.soft_delete()
@@ -281,5 +318,86 @@ class AssetRestoreTests(TestCase):
 
     def test_restore_without_tenant_header_fails(self):
         res = self.client.post(asset_restore_url(self.asset.id))
+
+        self.assertEqual(res.status_code, 403)
+
+    def test_non_staff_cannot_restore(self):
+        non_staff = create_user(self.tenant, email="nonstaff@example.com")
+        self.client.force_authenticate(non_staff)
+
+        res = self.client.post(
+            asset_restore_url(self.asset.id),
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+
+class AssetSupervisorPermissionTests(TestCase):
+    def setUp(self):
+        self.tenant = create_tenant()
+        self.asset_type = create_asset_type(self.tenant)
+        self.supervisor = create_user(
+            self.tenant, email="supervisor@example.com"
+        )
+        self.other_user = create_user(self.tenant, email="other@example.com")
+        self.asset = create_asset(
+            self.tenant, self.asset_type, supervisor=self.supervisor
+        )
+        self.client = APIClient()
+
+    def test_supervisor_can_update_their_asset(self):
+        self.client.force_authenticate(self.supervisor)
+
+        res = self.client.patch(
+            asset_detail_url(self.asset.id),
+            {"name": "Updated by supervisor"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.name, "Updated by supervisor")
+
+    def test_non_supervisor_cannot_update_asset(self):
+        self.client.force_authenticate(self.other_user)
+
+        res = self.client.patch(
+            asset_detail_url(self.asset.id),
+            {"name": "Unauthorized update"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+    def test_non_staff_cannot_delete_asset(self):
+        self.client.force_authenticate(self.supervisor)
+
+        res = self.client.delete(
+            asset_detail_url(self.asset.id),
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+    def test_supervisor_can_send_sensor_alert(self):
+        self.client.force_authenticate(self.supervisor)
+
+        res = self.client.post(
+            asset_sensor_alert_url(self.asset.id),
+            {"severity": "warning", "message": "Pressure high"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 202)
+
+    def test_non_supervisor_cannot_send_sensor_alert(self):
+        self.client.force_authenticate(self.other_user)
+
+        res = self.client.post(
+            asset_sensor_alert_url(self.asset.id),
+            {"severity": "warning", "message": "Pressure high"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
 
         self.assertEqual(res.status_code, 403)

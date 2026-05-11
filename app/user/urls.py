@@ -5,6 +5,7 @@ from .views import (
     ForgotPasswordView,
     ListUsersView,
     MeView,
+    PromoteUserView,
     ResetPasswordView,
 )
 
@@ -22,4 +23,5 @@ urlpatterns = [
     path(
         "reset-password/", ResetPasswordView.as_view(), name="reset-password"
     ),
+    path("<uuid:pk>/promote/", PromoteUserView.as_view(), name="promote"),
 ]

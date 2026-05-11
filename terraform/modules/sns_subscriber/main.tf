@@ -91,6 +91,7 @@ module "iam_role" {
   name                  = var.name
   sqs_queue_arn         = aws_sqs_queue.main.arn
   sqs_results_queue_arn = var.sqs_results_queue_arn
+  sqs_results_enabled   = var.sqs_results_enabled
   ses_enabled           = var.ses_from_email != null
   dynamodb_table_arn    = aws_dynamodb_table.idempotency.arn
 }

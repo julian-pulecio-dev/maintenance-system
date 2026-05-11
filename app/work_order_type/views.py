@@ -1,11 +1,15 @@
 from django.db import IntegrityError
 from django.db.models.deletion import ProtectedError
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from tenant.permissions import TenantHeaderRequired
+from tenant.permissions import IsStaffOrSuperuser, TenantHeaderRequired
 from .models import WorkOrderType
 from .serializers import WorkOrderTypeSerializer
 
@@ -44,7 +48,11 @@ from .serializers import WorkOrderTypeSerializer
 class WorkOrderTypeListCreateView(generics.ListCreateAPIView):
     serializer_class = WorkOrderTypeSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrSuperuser,
+        TenantHeaderRequired,
+    ]
 
     def get_queryset(self):
         return WorkOrderType.objects.filter(tenant=self.request.tenant)
@@ -114,7 +122,11 @@ class WorkOrderTypeListCreateView(generics.ListCreateAPIView):
 class WorkOrderTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = WorkOrderTypeSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrSuperuser,
+        TenantHeaderRequired,
+    ]
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):

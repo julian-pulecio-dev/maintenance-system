@@ -70,7 +70,7 @@ def create_work_order(tenant, asset, work_order_type, user, **kwargs):
 class WorkOrderTypeListCreateTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -109,7 +109,10 @@ class WorkOrderTypeListCreateTests(TestCase):
         self.assertEqual(res.status_code, 401)
 
     def test_create_work_order_type_success(self):
-        payload = {"name": "Preventive", "description": "Scheduled maintenance"}
+        payload = {
+            "name": "Preventive",
+            "description": "Scheduled maintenance",
+        }
 
         res = self.client.post(
             WORK_ORDER_TYPE_LIST_URL,
@@ -148,14 +151,26 @@ class WorkOrderTypeListCreateTests(TestCase):
         self.assertEqual(res.status_code, 201)
 
     def test_create_without_tenant_header_fails(self):
-        res = self.client.post(WORK_ORDER_TYPE_LIST_URL, {"name": "Preventive"})
+        res = self.client.post(
+            WORK_ORDER_TYPE_LIST_URL, {"name": "Preventive"}
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_non_staff_user_is_forbidden(self):
+        non_staff = create_user(self.tenant, email="nonstaff@example.com")
+        self.client.force_authenticate(non_staff)
+
+        res = self.client.get(
+            WORK_ORDER_TYPE_LIST_URL, HTTP_X_TENANT_ID=str(self.tenant.id)
+        )
+
         self.assertEqual(res.status_code, 403)
 
 
 class WorkOrderTypeDetailTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.work_order_type = create_work_order_type(self.tenant)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
@@ -216,9 +231,7 @@ class WorkOrderTypeDetailTests(TestCase):
     def test_delete_with_work_orders_fails(self):
         asset_type = create_asset_type(self.tenant)
         asset = create_asset(self.tenant, asset_type, self.user)
-        create_work_order(
-            self.tenant, asset, self.work_order_type, self.user
-        )
+        create_work_order(self.tenant, asset, self.work_order_type, self.user)
 
         res = self.client.delete(
             work_order_type_detail_url(self.work_order_type.id),

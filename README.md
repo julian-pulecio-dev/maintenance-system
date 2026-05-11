@@ -76,7 +76,7 @@ maintenance-system/
 │   ├── tenant/                            # Multi-tenancy plumbing
 │   │   ├── models.py                      # Tenant (UUID PK, name)
 │   │   ├── middleware.py                  # Attaches request.tenant from X-Tenant-ID header
-│   │   ├── permissions.py                 # TenantHeaderRequired permission class
+│   │   ├── permissions.py                 # TenantHeaderRequired, IsStaffOrSuperuser, IsStaffOrAssetSupervisor, IsStaffOrWorkOrderAssignee
 │   │   ├── views.py                       # Admin-only CRUD
 │   │   └── urls.py
 │   ├── asset/                             # Asset management
@@ -126,6 +126,11 @@ maintenance-system/
 │   ├── outputs.tf
 │   ├── terraform.tfvars
 │   ├── backend.tf / backend-prod.hcl     # S3 remote state backend
+│   ├── scripts/                          # Operational scripts (require AWS CLI + Terraform)
+│   │   ├── create_superuser.sh           # Create a global superuser on a running ECS task (bash)
+│   │   ├── create_superuser.ps1          # Create a global superuser on a running ECS task (PowerShell)
+│   │   ├── teardown_infra.sh             # Drain ECS tasks before terraform destroy (bash)
+│   │   └── teardown_infra.ps1            # Drain ECS tasks before terraform destroy (PowerShell)
 │   └── modules/
 │       ├── vpc/                          # VPC, subnets, security groups
 │       ├── rds/                          # PostgreSQL RDS instance
@@ -194,9 +199,23 @@ This will:
 
 ### 4. Create a superuser (first time only)
 
+**Local:**
+
 ```bash
 docker compose run --rm app python manage.py createsuperuser
 ```
+
+**Production (ECS):** use the `create_superuser` script, which discovers the running ECS cluster and task automatically and executes the management command inside the container via `aws ecs execute-command`.
+
+```bash
+# bash
+./terraform/scripts/create_superuser.sh -e admin@example.com -p secret123 -n "Admin"
+
+# PowerShell
+.\terraform\scripts\create_superuser.ps1 -Email admin@example.com -Password secret123 -Name "Admin"
+```
+
+If multiple clusters or services are found the script will prompt you to select one.
 
 Superusers are not tenant-scoped — they can access admin-only endpoints without the `X-Tenant-ID` header.
 
@@ -278,11 +297,26 @@ docker compose down
 docker compose down -v
 ```
 
-To tear down the production AWS infrastructure:
+To tear down the production AWS infrastructure, first drain all ECS tasks with the teardown script, then run `terraform destroy`. Skipping the first step will cause `terraform destroy` to hang because the Application Auto Scaling policy on the main API service keeps replacing terminated tasks.
+
+```bash
+# bash — drain ECS tasks (Terraform already initialised)
+./terraform/scripts/teardown_infra.sh
+
+# bash — drain ECS tasks + init Terraform in one step
+./terraform/scripts/teardown_infra.sh --backend backend-prod.hcl
+
+# PowerShell — drain ECS tasks (Terraform already initialised)
+.\terraform\scripts\teardown_infra.ps1
+
+# PowerShell — drain ECS tasks + init Terraform in one step
+.\terraform\scripts\teardown_infra.ps1 -Backend backend-prod.hcl
+```
+
+Once all tasks are stopped:
 
 ```bash
 cd terraform
-terraform init -backend-config=backend-prod.hcl
 terraform destroy
 ```
 
@@ -392,6 +426,36 @@ Every queryset in views is filtered with `.for_tenant(request.tenant)` before an
 
 1. `POST /api/user/forgot-password/` with `email` + `X-Tenant-ID` → creates a `PasswordResetToken` (UUID, 1-hour expiry) and sends an email with the token.
 2. `POST /api/user/reset-password/` with `token` + `password` → validates the token, updates the password, marks the token used, and invalidates all other pending tokens for that user.
+
+### Roles & Permissions
+
+The system has three levels of access within a tenant:
+
+| Role | How to obtain | `is_staff` | `is_superuser` |
+|---|---|---|---|
+| **Regular user** | Created via `POST /api/user/create/` | `false` | `false` |
+| **Staff user** | Promoted via `POST /api/user/{id}/promote/` | `true` | `false` |
+| **Superuser** | Created via `manage.py createsuperuser` or the ECS script | `false` | `true` |
+
+Staff users and superusers are treated identically for authorization purposes throughout the API. The current user's `is_staff` flag is included in the `GET /api/user/me` response.
+
+#### Permission matrix
+
+| Resource / Action | Regular user | Staff / Superuser |
+|---|---|---|
+| **Asset Types** — all endpoints | ✗ | ✓ |
+| **Work Order Types** — all endpoints | ✗ | ✓ |
+| **Assets** — list, retrieve | ✓ | ✓ |
+| **Assets** — create, delete, restore, assign supervisor | ✗ | ✓ |
+| **Assets** — update (`PATCH`) | ✓ only if `supervisor` | ✓ |
+| **Assets** — sensor alert | ✓ only if `supervisor` | ✓ |
+| **Work Orders** — list, retrieve | ✓ | ✓ |
+| **Work Orders** — create, delete, restore, assign | ✗ | ✓ |
+| **Work Orders** — update (`PATCH`) | ✓ only if `assigned_to` | ✓ |
+| **Work Orders** — start, hold, complete, cancel | ✓ only if `assigned_to` | ✓ |
+| **Users** — promote to staff | ✗ | ✓ |
+
+Object-level checks (supervisor / assigned_to) are enforced by DRF permission classes and applied after the tenant isolation filter, so a user cannot manipulate resources belonging to another tenant even if they happen to be the supervisor or assignee.
 
 ---
 
@@ -772,6 +836,8 @@ All endpoints (except token and user creation) require:
 
 ### Endpoints summary
 
+Role legend: `[any]` = any authenticated user · `[staff]` = staff or superuser only · `[supervisor]` = staff or asset supervisor · `[assignee]` = staff or work order assignee
+
 ```
 # Auth
 POST   /api/token/                          Obtain JWT token pair
@@ -780,10 +846,11 @@ POST   /api/token/verify/                   Verify token
 
 # Users
 POST   /api/user/create/                    Register a new user (requires X-Tenant-ID)
-GET    /api/user/me                          Get current user profile
-PATCH  /api/user/me                          Update current user
-DELETE /api/user/me                          Delete current user
-GET    /api/user/list/                       List users in the current tenant
+GET    /api/user/me                         [any]    Get current user profile (includes is_staff)
+PATCH  /api/user/me                         [any]    Update current user
+DELETE /api/user/me                         [any]    Delete current user
+GET    /api/user/list/                      [any]    List users in the current tenant
+POST   /api/user/{id}/promote/              [staff]  Promote user to staff
 POST   /api/user/forgot-password/           Send password reset email
 POST   /api/user/reset-password/            Reset password with token
 
@@ -794,7 +861,7 @@ GET    /api/tenant/{id}/                     Retrieve tenant
 PATCH  /api/tenant/{id}/                     Update tenant
 DELETE /api/tenant/{id}/                     Delete tenant
 
-# Asset Types
+# Asset Types                               [staff]  all endpoints
 GET    /api/asset-type/                      List asset types
 POST   /api/asset-type/                      Create asset type
 GET    /api/asset-type/{id}/                 Retrieve
@@ -802,16 +869,16 @@ PATCH  /api/asset-type/{id}/                 Update
 DELETE /api/asset-type/{id}/                 Delete
 
 # Assets
-GET    /api/asset/                           List assets (excludes soft-deleted)
-POST   /api/asset/                           Create asset
-GET    /api/asset/{id}/                      Retrieve asset
-PATCH  /api/asset/{id}/                      Update asset
-DELETE /api/asset/{id}/                      Soft-delete asset
-POST   /api/asset/{id}/restore/              Restore soft-deleted asset
-POST   /api/asset/{id}/supervisor/           Assign supervisor
-POST   /api/asset/{id}/sensor-alert/         Report an alert  body: {message?, severity?}
+GET    /api/asset/                          [any]        List assets (excludes soft-deleted)
+POST   /api/asset/                          [staff]      Create asset
+GET    /api/asset/{id}/                     [any]        Retrieve asset
+PATCH  /api/asset/{id}/                     [supervisor] Update asset
+DELETE /api/asset/{id}/                     [staff]      Soft-delete asset
+POST   /api/asset/{id}/restore/             [staff]      Restore soft-deleted asset
+POST   /api/asset/{id}/supervisor/          [staff]      Assign supervisor
+POST   /api/asset/{id}/sensor-alert/        [supervisor] Report an alert  body: {message?, severity?}
 
-# Work Order Types
+# Work Order Types                          [staff]  all endpoints
 GET    /api/work-order-type/                 List work order types
 POST   /api/work-order-type/                 Create work order type
 GET    /api/work-order-type/{id}/            Retrieve
@@ -819,18 +886,18 @@ PATCH  /api/work-order-type/{id}/            Update
 DELETE /api/work-order-type/{id}/            Delete  (409 if active work orders exist)
 
 # Work Orders
-GET    /api/work-order/                      List work orders
-                                             Filters: ?status=&priority=&asset=&assigned_to=
-POST   /api/work-order/                      Create work order
-GET    /api/work-order/{id}/                 Retrieve work order
-PATCH  /api/work-order/{id}/                 Update work order
-DELETE /api/work-order/{id}/                 Soft-delete work order
-POST   /api/work-order/{id}/restore/         Restore      body: {notes}
-POST   /api/work-order/{id}/start/           → IN_PROGRESS  body: {notes}
-POST   /api/work-order/{id}/hold/            → ON_HOLD      body: {notes}
-POST   /api/work-order/{id}/complete/        → COMPLETED    body: {notes, estimated_hours}
-POST   /api/work-order/{id}/cancel/          → CANCELLED    body: {notes}
-POST   /api/work-order/{id}/assign/          Reassign       body: {assigned_to, notes}
+GET    /api/work-order/                     [any]      List work orders
+                                                       Filters: ?status=&priority=&asset=&assigned_to=
+POST   /api/work-order/                     [staff]    Create work order
+GET    /api/work-order/{id}/                [any]      Retrieve work order
+PATCH  /api/work-order/{id}/                [assignee] Update work order
+DELETE /api/work-order/{id}/                [staff]    Soft-delete work order
+POST   /api/work-order/{id}/restore/        [staff]    Restore      body: {notes}
+POST   /api/work-order/{id}/start/          [assignee] → IN_PROGRESS  body: {notes}
+POST   /api/work-order/{id}/hold/           [assignee] → ON_HOLD      body: {notes}
+POST   /api/work-order/{id}/complete/       [assignee] → COMPLETED    body: {notes, estimated_hours}
+POST   /api/work-order/{id}/cancel/         [assignee] → CANCELLED    body: {notes}
+POST   /api/work-order/{id}/assign/         [staff]    Reassign       body: {assigned_to, notes}
 
 # Outbox  (read-only inspection)
 GET    /api/outbox/                          List outbox events

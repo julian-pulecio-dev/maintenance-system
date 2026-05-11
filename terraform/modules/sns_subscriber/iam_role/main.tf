@@ -35,7 +35,7 @@ resource "aws_iam_role_policy_attachment" "sqs_consume_attach" {
 }
 
 resource "aws_iam_policy" "sqs_results_publish" {
-  count = var.sqs_results_queue_arn != null ? 1 : 0
+  count = var.sqs_results_enabled ? 1 : 0
   name  = "${var.name}-sqs-results-publish"
 
   policy = jsonencode({
@@ -49,7 +49,7 @@ resource "aws_iam_policy" "sqs_results_publish" {
 }
 
 resource "aws_iam_role_policy_attachment" "sqs_results_publish_attach" {
-  count      = var.sqs_results_queue_arn != null ? 1 : 0
+  count      = var.sqs_results_enabled ? 1 : 0
   role       = aws_iam_role.lambda.name
   policy_arn = aws_iam_policy.sqs_results_publish[0].arn
 }

@@ -25,6 +25,9 @@ WO_AGGREGATE_TYPE = "WorkOrder"
 EVENT_WO_DUE_UPCOMING = "work_order.due_date.upcoming"
 EVENT_WO_DUE_OVERDUE = "work_order.due_date.overdue"
 
+EVENT_WO_SCHEDULED_UPCOMING = "work_order.scheduled_date.upcoming"
+EVENT_WO_SCHEDULED_OVERDUE = "work_order.scheduled_date.overdue"
+
 _WO_ACTIVE_STATUSES = {
     WorkOrder.WorkOrderStatus.OPEN,
     WorkOrder.WorkOrderStatus.IN_PROGRESS,
@@ -234,14 +237,19 @@ def check_maintenance_dates():
 def _wo_payload(*, work_order: WorkOrder, extra: dict) -> dict:
     asset = work_order.asset
     assigned_to = work_order.assigned_to
+    work_order_type = work_order.work_order_type
+    created_by = work_order.created_by
     return {
         "data": {
             "id": str(work_order.id),
+            "tenant_id": str(work_order.tenant_id),
             "title": work_order.title,
             "status": work_order.status,
             "priority": work_order.priority,
             "due_date": (
-                work_order.due_date.isoformat() if work_order.due_date else None
+                work_order.due_date.isoformat()
+                if work_order.due_date
+                else None
             ),
             "scheduled_date": (
                 work_order.scheduled_date.isoformat()
@@ -250,16 +258,31 @@ def _wo_payload(*, work_order: WorkOrder, extra: dict) -> dict:
             ),
             "description": work_order.description,
             "notes": work_order.notes,
+            "estimated_hours": (
+                str(work_order.estimated_hours)
+                if work_order.estimated_hours is not None
+                else None
+            ),
             "asset": {
                 "id": str(asset.id),
                 "name": asset.name,
                 "serial_number": asset.serial_number,
+                "status": asset.status,
                 "location": asset.location,
+            },
+            "work_order_type": {
+                "id": str(work_order_type.id),
+                "name": work_order_type.name,
             },
             "assigned_to": {
                 "id": str(assigned_to.id),
                 "email": assigned_to.email,
                 "name": assigned_to.name,
+            },
+            "created_by": {
+                "id": str(created_by.id),
+                "email": created_by.email,
+                "name": created_by.name,
             },
             "created_at": work_order.created_at.isoformat(),
             "updated_at": work_order.updated_at.isoformat(),
@@ -268,9 +291,7 @@ def _wo_payload(*, work_order: WorkOrder, extra: dict) -> dict:
     }
 
 
-def _publish_wo_due_upcoming(
-    *, work_order: WorkOrder, days_left: int
-) -> bool:
+def _publish_wo_due_upcoming(*, work_order: WorkOrder, days_left: int) -> bool:
     return _try_create_outbox_event(
         tenant_id=work_order.tenant_id,
         event_type=EVENT_WO_DUE_UPCOMING,
@@ -308,18 +329,131 @@ def _publish_wo_due_overdue(
     )
 
 
+def _publish_wo_scheduled_upcoming(
+    *, work_order: WorkOrder, days_left: int
+) -> bool:
+    return _try_create_outbox_event(
+        tenant_id=work_order.tenant_id,
+        event_type=EVENT_WO_SCHEDULED_UPCOMING,
+        aggregate_type=WO_AGGREGATE_TYPE,
+        aggregate_id=work_order.id,
+        source_service=WO_SOURCE_SERVICE,
+        idempotency_key=_build_idempotency_key(
+            event_type=EVENT_WO_SCHEDULED_UPCOMING,
+            aggregate_id=work_order.id,
+            ref_date=work_order.scheduled_date,
+        ),
+        payload=_wo_payload(
+            work_order=work_order, extra={"days_left": days_left}
+        ),
+    )
+
+
+def _publish_wo_scheduled_overdue(
+    *, work_order: WorkOrder, days_overdue: int
+) -> bool:
+    return _try_create_outbox_event(
+        tenant_id=work_order.tenant_id,
+        event_type=EVENT_WO_SCHEDULED_OVERDUE,
+        aggregate_type=WO_AGGREGATE_TYPE,
+        aggregate_id=work_order.id,
+        source_service=WO_SOURCE_SERVICE,
+        idempotency_key=_build_idempotency_key(
+            event_type=EVENT_WO_SCHEDULED_OVERDUE,
+            aggregate_id=work_order.id,
+            ref_date=work_order.scheduled_date,
+        ),
+        payload=_wo_payload(
+            work_order=work_order, extra={"days_overdue": days_overdue}
+        ),
+    )
+
+
+def check_work_order_scheduled_dates():
+    today = timezone.now().date()
+    warning_cutoff = today + timedelta(days=WARNING_DAYS)
+
+    work_orders = (
+        WorkOrder.objects.not_deleted()
+        .select_related(
+            "asset", "assigned_to", "work_order_type", "created_by"
+        )
+        .filter(
+            status__in=_WO_ACTIVE_STATUSES,
+            scheduled_date__isnull=False,
+            scheduled_date__lte=warning_cutoff,
+        )
+    )
+
+    logger.info(
+        "Work order scheduled-date check: found %d candidates (cutoff=%s)",
+        work_orders.count(),
+        warning_cutoff,
+    )
+
+    upcoming_count = 0
+    overdue_count = 0
+    skipped_count = 0
+
+    for wo in work_orders.iterator(chunk_size=1000):
+        try:
+            if wo.scheduled_date < today:
+                days_overdue = (today - wo.scheduled_date).days
+                created = _publish_wo_scheduled_overdue(
+                    work_order=wo, days_overdue=days_overdue
+                )
+                if created:
+                    overdue_count += 1
+                else:
+                    skipped_count += 1
+
+            else:
+                days_left = (wo.scheduled_date - today).days
+                created = _publish_wo_scheduled_upcoming(
+                    work_order=wo, days_left=days_left
+                )
+                if created:
+                    upcoming_count += 1
+                else:
+                    skipped_count += 1
+
+        except Exception:
+            logger.exception(
+                "Failed to process scheduled-date notification work_order_id=%s",
+                wo.id,
+            )
+
+    logger.info(
+        "Work order scheduled-date check complete "
+        "upcoming=%d overdue=%d skipped=%d",
+        upcoming_count,
+        overdue_count,
+        skipped_count,
+    )
+
+    return upcoming_count, overdue_count, skipped_count
+
+
 def check_work_order_due_dates():
     today = timezone.now().date()
     warning_cutoff = today + timedelta(days=WARNING_DAYS)
 
     work_orders = (
         WorkOrder.objects.not_deleted()
-        .select_related("asset", "assigned_to")
+        .select_related(
+            "asset", "assigned_to", "work_order_type", "created_by"
+        )
         .filter(
             status__in=_WO_ACTIVE_STATUSES,
             due_date__isnull=False,
             due_date__lte=warning_cutoff,
         )
+    )
+
+    logger.info(
+        "Work order due-date check: found %d candidates (cutoff=%s)",
+        work_orders.count(),
+        warning_cutoff,
     )
 
     upcoming_count = 0
@@ -378,6 +512,9 @@ class Command(BaseCommand):
 
         m_upcoming, m_overdue, m_skipped = check_maintenance_dates()
         wo_upcoming, wo_overdue, wo_skipped = check_work_order_due_dates()
+        ws_upcoming, ws_overdue, ws_skipped = (
+            check_work_order_scheduled_dates()
+        )
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -393,5 +530,13 @@ class Command(BaseCommand):
                 f"upcoming={wo_upcoming} "
                 f"overdue={wo_overdue} "
                 f"skipped={wo_skipped}"
+            )
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Work order scheduled dates — "
+                f"upcoming={ws_upcoming} "
+                f"overdue={ws_overdue} "
+                f"skipped={ws_skipped}"
             )
         )

@@ -13,6 +13,12 @@ variable "sqs_results_queue_arn" {
   default     = null
 }
 
+variable "sqs_results_enabled" {
+  description = "Whether to grant sqs:SendMessage on the results queue. Must be a static bool — do not derive from resource attributes."
+  type        = bool
+  default     = false
+}
+
 variable "ses_enabled" {
   description = "When true, grants ses:SendEmail to the Lambda role."
   type        = bool

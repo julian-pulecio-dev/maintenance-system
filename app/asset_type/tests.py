@@ -32,7 +32,7 @@ def create_asset_type(tenant, **kwargs):
 class AssetTypeListCreateTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -92,11 +92,21 @@ class AssetTypeListCreateTests(TestCase):
 
         self.assertEqual(res.status_code, 403)
 
+    def test_non_staff_user_is_forbidden(self):
+        non_staff = create_user(self.tenant, email="nonstaff@example.com")
+        self.client.force_authenticate(non_staff)
+
+        res = self.client.get(
+            ASSET_TYPE_LIST_URL, HTTP_X_TENANT_ID=str(self.tenant.id)
+        )
+
+        self.assertEqual(res.status_code, 403)
+
 
 class AssetTypeDetailTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.client = APIClient()
         self.client.force_authenticate(self.user)

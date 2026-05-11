@@ -192,6 +192,8 @@ def _process_results():
 
     for message in messages:
 
+        event_id = None
+
         try:
 
             body = json.loads(message["Body"])
@@ -202,48 +204,50 @@ def _process_results():
 
             error = body.get("error")
 
-            try:
+            with transaction.atomic():
 
-                event = OutboxEvent.objects.select_for_update().get(
-                    id=event_id
-                )
+                try:
 
-            except OutboxEvent.DoesNotExist:
+                    event = OutboxEvent.objects.select_for_update().get(
+                        id=event_id
+                    )
 
-                logger.error(
-                    ("Received result for " "unknown event_id=%s"),
-                    event_id,
-                )
+                except OutboxEvent.DoesNotExist:
 
-                continue
+                    logger.error(
+                        ("Received result for " "unknown event_id=%s"),
+                        event_id,
+                    )
 
-            if event.status != OutboxEvent.Status.PROCESSING:
+                    continue
 
-                logger.warning(
-                    (
-                        "Ignoring invalid "
-                        "result transition "
-                        "event_id=%s status=%s"
-                    ),
-                    event.id,
-                    event.status,
-                )
+                if event.status != OutboxEvent.Status.PROCESSING:
 
-                continue
+                    logger.warning(
+                        (
+                            "Ignoring invalid "
+                            "result transition "
+                            "event_id=%s status=%s"
+                        ),
+                        event.id,
+                        event.status,
+                    )
 
-            if status == "processed":
+                    continue
 
-                event.mark_sent()
+                if status == "processed":
 
-                processed += 1
+                    event.mark_sent()
 
-            else:
+                    processed += 1
 
-                event.mark_failed(
-                    error or ("Unknown downstream " "processing error")
-                )
+                else:
 
-                failed += 1
+                    event.mark_failed(
+                        error or ("Unknown downstream " "processing error")
+                    )
+
+                    failed += 1
 
             sqs.delete_message(
                 QueueUrl=queue_url,
@@ -252,7 +256,7 @@ def _process_results():
 
             logger.info(
                 ("Processed result " "event_id=%s status=%s"),
-                event.id,
+                event_id,
                 status,
             )
 

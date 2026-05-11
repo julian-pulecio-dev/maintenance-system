@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from tenant.permissions import TenantHeaderRequired
+from tenant.permissions import IsStaffOrSuperuser, TenantHeaderRequired
 from .models import PasswordResetToken
 from .serializers import (
     ForgotPasswordSerializer,
@@ -133,6 +133,51 @@ class ListUsersView(generics.ListAPIView):
 
     def get_queryset(self):
         return get_user_model().objects.filter(tenant=self.request.tenant)
+
+
+@extend_schema(
+    request=None,
+    responses={200: UserSerializer},
+    summary="Promote user to staff",
+    description=(
+        "Grants staff-level permissions (`is_staff = true`) to the specified "
+        "user within the current tenant.\n\n"
+        "**Errors:**\n"
+        "- `401` — Missing or invalid JWT token.\n"
+        "- `403` — Caller is not staff or superuser, or missing "
+        "`X-Tenant-ID` header.\n"
+        "- `404` — User not found in the current tenant.\n"
+        "- `409` — User is already a staff member."
+    ),
+)
+class PromoteUserView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        TenantHeaderRequired,
+        IsStaffOrSuperuser,
+    ]
+
+    def post(self, request, pk):
+        user = (
+            get_user_model()
+            .objects.filter(tenant=request.tenant, pk=pk)
+            .first()
+        )
+        if user is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if user.is_staff:
+            return Response(
+                {"detail": "User is already a staff member."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        user.is_staff = True
+        user.save(update_fields=["is_staff"])
+        return Response(
+            UserSerializer(user, context={"request": request}).data
+        )
 
 
 class ForgotPasswordView(APIView):

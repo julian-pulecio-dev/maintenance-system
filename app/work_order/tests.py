@@ -76,7 +76,7 @@ def create_work_order(tenant, asset, work_order_type, user, **kwargs):
 class WorkOrderListCreateTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
@@ -115,7 +115,9 @@ class WorkOrderListCreateTests(TestCase):
         self.assertEqual(len(res.data), 1)
 
     def test_list_excludes_soft_deleted(self):
-        wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         wo.soft_delete()
 
         res = self.client.get(
@@ -126,7 +128,9 @@ class WorkOrderListCreateTests(TestCase):
         self.assertEqual(len(res.data), 0)
 
     def test_list_filter_by_status(self):
-        wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         wo.start("Starting work")
         create_work_order(
             self.tenant, self.asset, self.wo_type, self.user, title="WO 2"
@@ -143,11 +147,17 @@ class WorkOrderListCreateTests(TestCase):
 
     def test_list_filter_by_priority(self):
         create_work_order(
-            self.tenant, self.asset, self.wo_type, self.user,
+            self.tenant,
+            self.asset,
+            self.wo_type,
+            self.user,
             priority=WorkOrder.WorkOrderPriority.HIGH,
         )
         create_work_order(
-            self.tenant, self.asset, self.wo_type, self.user,
+            self.tenant,
+            self.asset,
+            self.wo_type,
+            self.user,
             priority=WorkOrder.WorkOrderPriority.LOW,
         )
 
@@ -241,15 +251,48 @@ class WorkOrderListCreateTests(TestCase):
         res = self.client.post(WORK_ORDER_LIST_URL, {}, format="json")
         self.assertEqual(res.status_code, 403)
 
+    def test_non_staff_can_list(self):
+        non_staff = create_user(self.tenant)
+        self.client.force_authenticate(non_staff)
+
+        res = self.client.get(
+            WORK_ORDER_LIST_URL, HTTP_X_TENANT_ID=str(self.tenant.id)
+        )
+
+        self.assertEqual(res.status_code, 200)
+
+    def test_non_staff_cannot_create(self):
+        non_staff = create_user(self.tenant)
+        self.client.force_authenticate(non_staff)
+
+        payload = {
+            "asset": str(self.asset.id),
+            "work_order_type": str(self.wo_type.id),
+            "assigned_to": str(non_staff.id),
+            "title": "Inspect pump",
+            "priority": "high",
+        }
+
+        res = self.client.post(
+            WORK_ORDER_LIST_URL,
+            payload,
+            format="json",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
 
 class WorkOrderDetailTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
-        self.wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        self.wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -304,11 +347,13 @@ class WorkOrderDetailTests(TestCase):
 class WorkOrderRestoreTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
-        self.wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        self.wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         self.wo.soft_delete()
         self.client = APIClient()
         self.client.force_authenticate(self.user)
@@ -346,11 +391,13 @@ class WorkOrderRestoreTests(TestCase):
 class WorkOrderStartTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
-        self.wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        self.wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -400,11 +447,13 @@ class WorkOrderStartTests(TestCase):
 class WorkOrderHoldTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
-        self.wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        self.wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -456,11 +505,13 @@ class WorkOrderHoldTests(TestCase):
 class WorkOrderCompleteTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
-        self.wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        self.wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         self.wo.start("Starting.")
         self.client = APIClient()
         self.client.force_authenticate(self.user)
@@ -498,10 +549,14 @@ class WorkOrderCompleteTests(TestCase):
 
         self.asset.refresh_from_db()
         self.wo.refresh_from_db()
-        self.assertEqual(self.asset.last_maintenance_date, self.wo.completed_date)
+        self.assertEqual(
+            self.asset.last_maintenance_date, self.wo.completed_date
+        )
 
     def test_complete_from_open_fails(self):
-        wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
 
         res = self.client.post(
             work_order_action_url(wo.id, "complete"),
@@ -533,11 +588,13 @@ class WorkOrderCompleteTests(TestCase):
 class WorkOrderCancelTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
-        self.wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        self.wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -597,12 +654,14 @@ class WorkOrderCancelTests(TestCase):
 class WorkOrderAssignTests(TestCase):
     def setUp(self):
         self.tenant = create_tenant()
-        self.user = create_user(self.tenant)
+        self.user = create_user(self.tenant, is_staff=True)
         self.other_user = create_user(self.tenant)
         self.asset_type = create_asset_type(self.tenant)
         self.asset = create_asset(self.tenant, self.asset_type, self.user)
         self.wo_type = create_work_order_type(self.tenant)
-        self.wo = create_work_order(self.tenant, self.asset, self.wo_type, self.user)
+        self.wo = create_work_order(
+            self.tenant, self.asset, self.wo_type, self.user
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -670,3 +729,94 @@ class WorkOrderAssignTests(TestCase):
         )
         self.assertEqual(res.status_code, 400)
         self.assertIn("assigned_to", res.data)
+
+    def test_non_staff_cannot_assign(self):
+        non_staff = create_user(self.tenant)
+        self.client.force_authenticate(non_staff)
+
+        res = self.client.post(
+            self._url(),
+            {"assigned_to": str(self.other_user.id), "notes": "Reassign."},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+
+class WorkOrderAssigneePermissionTests(TestCase):
+    def setUp(self):
+        self.tenant = create_tenant()
+        self.staff_user = create_user(self.tenant, is_staff=True)
+        self.assignee = create_user(self.tenant)
+        self.other_user = create_user(self.tenant)
+        self.asset_type = create_asset_type(self.tenant)
+        self.asset = create_asset(
+            self.tenant, self.asset_type, self.staff_user
+        )
+        self.wo_type = create_work_order_type(self.tenant)
+        self.wo = create_work_order(
+            self.tenant,
+            self.asset,
+            self.wo_type,
+            self.staff_user,
+            assigned_to=self.assignee,
+        )
+        self.client = APIClient()
+
+    def test_assignee_can_update_work_order(self):
+        self.client.force_authenticate(self.assignee)
+
+        res = self.client.patch(
+            work_order_detail_url(self.wo.id),
+            {"title": "Updated by assignee"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.wo.refresh_from_db()
+        self.assertEqual(self.wo.title, "Updated by assignee")
+
+    def test_non_assignee_cannot_update_work_order(self):
+        self.client.force_authenticate(self.other_user)
+
+        res = self.client.patch(
+            work_order_detail_url(self.wo.id),
+            {"title": "Unauthorized"},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+    def test_assignee_can_start_work_order(self):
+        self.client.force_authenticate(self.assignee)
+
+        res = self.client.post(
+            work_order_action_url(self.wo.id, "start"),
+            {"notes": "Starting now."},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.wo.refresh_from_db()
+        self.assertEqual(self.wo.status, WorkOrder.WorkOrderStatus.IN_PROGRESS)
+
+    def test_non_assignee_cannot_start_work_order(self):
+        self.client.force_authenticate(self.other_user)
+
+        res = self.client.post(
+            work_order_action_url(self.wo.id, "start"),
+            {"notes": "Starting."},
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+    def test_non_staff_cannot_delete_work_order(self):
+        self.client.force_authenticate(self.assignee)
+
+        res = self.client.delete(
+            work_order_detail_url(self.wo.id),
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        self.assertEqual(res.status_code, 403)

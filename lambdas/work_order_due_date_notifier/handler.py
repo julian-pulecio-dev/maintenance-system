@@ -23,9 +23,14 @@ class WorkOrderDueEmailNotifier(EmailNotifierHandler):
         estimated_hours = data.get("estimated_hours")
         estimated_hours_str = f"{estimated_hours} h" if estimated_hours else "—"
 
+        if data.get("due_date"):
+            context_msg = "A work order assigned to you is due soon."
+        else:
+            context_msg = "A work order assigned to you is approaching its scheduled date."
+
         return (
             f"Hello {assigned_to.get('name', '')},\n\n"
-            f"A work order assigned to you is due soon.\n\n"
+            f"{context_msg}\n\n"
             f"{'─' * 40}\n"
             f"EVENT\n"
             f"{'─' * 40}\n"

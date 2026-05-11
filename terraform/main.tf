@@ -93,6 +93,7 @@ module "asset_email_notifier_worker" {
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  sqs_results_enabled   = true
   ses_from_email        = var.email_default_from
 }
 
@@ -115,6 +116,7 @@ module "work_order_email_notifier_worker" {
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  sqs_results_enabled   = true
   ses_from_email        = var.email_default_from
 }
 
@@ -127,6 +129,7 @@ module "asset_maintenance_email_notifier_worker" {
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  sqs_results_enabled   = true
   ses_from_email        = var.email_default_from
 }
 
@@ -139,6 +142,7 @@ module "asset_sensor_alert_notifier_worker" {
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  sqs_results_enabled   = true
   ses_from_email        = var.email_default_from
 }
 
@@ -146,10 +150,16 @@ module "work_order_due_date_notifier_worker" {
   source             = "./modules/sns_subscriber"
   name               = "${var.name}-wo-due-date-notifier"
   sns_topic_arn      = module.sns_outbox_observer.topic_arn
-  filter_event_types = ["work_order.due_date.upcoming", "work_order.due_date.overdue"]
+  filter_event_types = [
+                        "work_order.due_date.upcoming",
+                        "work_order.due_date.overdue",
+                        "work_order.scheduled_date.upcoming",
+                        "work_order.scheduled_date.overdue",
+                        ]
   source_dir         = "${path.root}/../lambdas/work_order_due_date_notifier"
 
   sqs_results_queue_url = module.sqs_outbox_results.queue_url
   sqs_results_queue_arn = module.sqs_outbox_results.queue_arn
+  sqs_results_enabled   = true
   ses_from_email        = var.email_default_from
 }

@@ -65,3 +65,9 @@ variable "sqs_results_queue_arn" {
   type        = string
   default     = null
 }
+
+variable "sqs_results_enabled" {
+  description = "Set to true when sqs_results_queue_arn is provided. Must be a static bool — Terraform cannot use the ARN itself in a count condition."
+  type        = bool
+  default     = false
+}

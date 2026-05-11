@@ -12,7 +12,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from tenant.permissions import TenantHeaderRequired
+from tenant.permissions import (
+    IsStaffOrAssetSupervisor,
+    IsStaffOrSuperuser,
+    TenantHeaderRequired,
+)
 from .models import Asset
 from .serializers import AssetSerializer
 from .services import (
@@ -23,10 +27,13 @@ from .services import (
 
 
 class SensorAlertSerializer(serializers.Serializer):
-    message = serializers.CharField(required=False, default="", allow_blank=True)
+    message = serializers.CharField(
+        required=False, default="", allow_blank=True
+    )
     severity = serializers.ChoiceField(
         choices=["warning", "critical"], default="warning"
     )
+
 
 User = get_user_model()
 
@@ -93,7 +100,11 @@ User = get_user_model()
 class AssetListCreateView(generics.ListCreateAPIView):
     serializer_class = AssetSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrAssetSupervisor,
+        TenantHeaderRequired,
+    ]
 
     def get_queryset(self):
         qs = Asset.objects.for_tenant(self.request.tenant).not_deleted()
@@ -178,7 +189,11 @@ class AssetListCreateView(generics.ListCreateAPIView):
 class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AssetSerializer
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrAssetSupervisor,
+        TenantHeaderRequired,
+    ]
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
@@ -211,9 +226,7 @@ class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 @extend_schema(
-    request=inline_serializer(
-        "AssetRestoreRequest", fields={}
-    ),
+    request=inline_serializer("AssetRestoreRequest", fields={}),
     responses={200: AssetSerializer},
     summary="Restore a soft-deleted asset",
     description=(
@@ -234,7 +247,11 @@ class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
 )
 class AssetRestoreView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrSuperuser,
+        TenantHeaderRequired,
+    ]
 
     def post(self, request, pk):
         try:
@@ -287,7 +304,11 @@ class AssetRestoreView(APIView):
 )
 class AssetSupervisorView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrSuperuser,
+        TenantHeaderRequired,
+    ]
 
     def _get_asset(self, request, pk):
         return (
@@ -357,7 +378,11 @@ class AssetSupervisorView(APIView):
 )
 class AssetSensorAlertView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, TenantHeaderRequired]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsStaffOrAssetSupervisor,
+        TenantHeaderRequired,
+    ]
 
     def post(self, request, pk):
         try:
@@ -369,6 +394,8 @@ class AssetSensorAlertView(APIView):
             )
         except Asset.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        self.check_object_permissions(request, asset)
 
         serializer = SensorAlertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
