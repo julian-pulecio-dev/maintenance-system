@@ -125,8 +125,7 @@ class EmailNotifierHandler(abc.ABC):
                         idempotency_key,
                         event_id,
                     )
-                    if event_id:
-                        self._send_result(event_id, status="processed")
+
                     continue
 
                 if event_id:
