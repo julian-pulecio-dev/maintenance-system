@@ -126,7 +126,7 @@ class EmailNotifierHandler(abc.ABC):
                         event_id,
                     )
 
-                    continue
+                    return
 
                 if event_id:
                     self._send_result(event_id, status="processed")
