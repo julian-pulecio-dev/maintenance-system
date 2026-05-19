@@ -23,7 +23,8 @@ A multi-tenant REST API for managing industrial asset maintenance and work order
 15. [Lambda Notifiers](#lambda-notifiers)
 16. [API Reference](#api-reference)
 17. [Infrastructure (Terraform)](#infrastructure-terraform)
-18. [CI/CD Pipelines](#cicd-pipelines)
+18. [Infrastructure cost estimate](#infrastructure-cost-estimate)
+19. [CI/CD Pipelines](#cicd-pipelines)
 19. [Design Decisions](#design-decisions)
 
 ---
@@ -951,6 +952,51 @@ Provisions a Lambda function for each event consumer:
 ### Secrets management
 
 Database credentials live in AWS Secrets Manager. Terraform reads them at apply time and injects them into ECS task definitions as environment variables. No credentials are ever stored in version control or Terraform state in plaintext.
+
+### Infrastructure cost estimate
+
+The following figures are monthly estimates for the `us-east-1` region at a typical small-to-medium production workload. All prices are in USD.
+
+#### Fixed costs (always running)
+
+| Service | Configuration | Est. cost/month |
+|---|---|---|
+| ECS Fargate — Django API | 1–2 tasks · 0.25 vCPU / 0.5 GB RAM | $9–18 |
+| ECS Fargate — Outbox Worker | 1 task continuous · 0.25 vCPU / 0.5 GB RAM | $9 |
+| ECS Fargate — Maintenance Checker | 1 task continuous · 0.25 vCPU / 0.5 GB RAM | $9 |
+| RDS PostgreSQL 15 | db.t3.micro + 20 GB storage | $15 |
+| Application Load Balancer | Fixed charge + LCUs | $17–20 |
+| NAT Gateway | 1 AZ (required for private-subnet tasks to reach AWS APIs) | $32 |
+| AWS Secrets Manager | ~2 secrets (DB credentials) | $1 |
+| CloudWatch Logs | ECS + Lambda log groups | $2–5 |
+
+#### Variable costs (scale with usage)
+
+| Service | Free tier | Beyond free tier |
+|---|---|---|
+| SNS | 1M requests/month | $0.50 per additional 1M |
+| SQS | 1M requests/month | $0.40 per additional 1M |
+| Lambda (×5 functions) | 1M invocations/month | $0.20 per additional 1M |
+| DynamoDB (idempotency store) | 25 GB + 200M requests/month | Pay-per-request beyond free tier |
+| SES | 62,000 emails/month (from EC2/ECS) | $0.10 per additional 1,000 emails |
+| S3 (Terraform state) | — | < $0.01 |
+
+At typical notification volumes (hundreds to low thousands of events per day) all variable services stay within or very close to the AWS free tier.
+
+#### Total estimate
+
+| Scenario | Est. cost/month |
+|---|---|
+| Minimal (1 API task, single-AZ RDS) | ~$95–100 |
+| Typical production (2 API tasks) | ~$105–115 |
+| High availability (2 API tasks + RDS Multi-AZ) | ~$120–130 |
+
+#### Main cost drivers to watch
+
+- **NAT Gateway ($32/month)** — the largest hidden cost. Required so that Fargate tasks in private subnets can reach SNS, SQS, SES, and ECR. Can be partially replaced with [VPC Endpoints](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints.html) for individual AWS services, which eliminates NAT data-transfer charges for those services.
+- **ALB ($17–20/month)** — fixed charge regardless of traffic volume.
+- **ECS Fargate** — the three always-on workers (API, outbox, maintenance checker) each run 24/7; cost scales linearly with `desired_count` and task size.
+- **RDS** — upgrading from `db.t3.micro` to `db.t3.small` roughly doubles the DB cost; enabling Multi-AZ doubles it again.
 
 ---
 

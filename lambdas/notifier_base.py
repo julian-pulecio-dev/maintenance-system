@@ -75,15 +75,15 @@ class EmailNotifierHandler(abc.ABC):
 
     @abc.abstractmethod
     def get_recipient_email(self, data: dict) -> str | None:
-        ...
+        pass
 
     @abc.abstractmethod
     def build_subject(self, data: dict, action: str) -> str:
-        ...
+        pass
 
     @abc.abstractmethod
     def build_body(self, data: dict, action: str) -> str:
-        ...
+        pass
 
     def handle(self, event, context):
         for record in event["Records"]:
@@ -107,16 +107,6 @@ class EmailNotifierHandler(abc.ABC):
                     data.get("id"),
                 )
 
-                if not self._mark_processed(idempotency_key):
-                    logger.info(
-                        "Duplicate event skipped idempotency_key=%s event_id=%s",
-                        idempotency_key,
-                        event_id,
-                    )
-                    if event_id:
-                        self._send_result(event_id, status="processed")
-                    continue
-
                 recipient = self.get_recipient_email(data)
 
                 if not recipient:
@@ -127,6 +117,17 @@ class EmailNotifierHandler(abc.ABC):
                 else:
                     self._send_email(to=recipient, data=data, event_type=event_type)
                     logger.info("Email sent to=%s event_id=%s", recipient, event_id)
+
+
+                if not self._mark_processed(idempotency_key):
+                    logger.info(
+                        "Duplicate event skipped idempotency_key=%s event_id=%s",
+                        idempotency_key,
+                        event_id,
+                    )
+                    if event_id:
+                        self._send_result(event_id, status="processed")
+                    continue
 
                 if event_id:
                     self._send_result(event_id, status="processed")
