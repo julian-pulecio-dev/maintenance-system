@@ -1,6 +1,7 @@
 # outbox/models.py
 
 import uuid
+from venv import logger
 
 from django.db import models
 from django.utils import timezone
@@ -182,6 +183,12 @@ class OutboxEvent(models.Model):
         )
 
     def mark_sent(self):
+        logger.error(
+            "MARK_SENT CALLED event_id=%s retry_count=%s current_status=%s",
+            self.id,
+            self.retry_count,
+            self.status,
+        )
         now = timezone.now()
 
         self.status = self.Status.SENT
