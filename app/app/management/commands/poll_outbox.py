@@ -70,7 +70,7 @@ def _claim_pending_events():
     with transaction.atomic():
 
         events = list(
-            OutboxEvent.objects.pending()
+            OutboxEvent.objects.dispatchable()
             .select_for_update(skip_locked=True)
             .order_by("created_at")[:BATCH_SIZE]
         )

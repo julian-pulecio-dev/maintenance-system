@@ -13,6 +13,15 @@ class OutboxEventQuerySet(models.QuerySet):
     def pending(self):
         return self.filter(status=OutboxEvent.Status.PENDING)
 
+    def dispatchable(self):
+        return self.filter(
+            models.Q(status=OutboxEvent.Status.PENDING)
+            | models.Q(
+                status=OutboxEvent.Status.FAILED,
+                retry_count__lt=OutboxEvent.MAX_RETRIES,
+            )
+        )
+
     def processing(self):
         return self.filter(status=OutboxEvent.Status.PROCESSING)
 
@@ -215,11 +224,7 @@ class OutboxEvent(models.Model):
 
         self.last_attempted_at = timezone.now()
 
-        self.status = (
-            self.Status.PENDING
-            if self.retry_count < self.MAX_RETRIES
-            else self.Status.FAILED
-        )
+        self.status = self.Status.FAILED
 
         self.save(
             update_fields=[
