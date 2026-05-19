@@ -190,14 +190,6 @@ class OutboxEvent(models.Model):
             self.status,
         )
 
-        # NO permitir sent después de retries/failures
-        if self.retry_count > 0:
-            logger.error(
-                "Refusing to mark SENT after previous failure event_id=%s",
-                self.id,
-            )
-            return
-
         now = timezone.now()
 
         self.status = self.Status.SENT

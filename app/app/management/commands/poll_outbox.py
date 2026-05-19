@@ -215,8 +215,35 @@ def _process_results():
                 except OutboxEvent.DoesNotExist:
 
                     logger.error(
-                        ("Received result for " "unknown event_id=%s"),
+                        "Received result for unknown event_id=%s",
                         event_id,
+                    )
+
+                    sqs.delete_message(
+                        QueueUrl=queue_url,
+                        ReceiptHandle=message["ReceiptHandle"],
+                    )
+
+                    continue
+
+                if (
+                    status == "processed"
+                    and event.retry_count > 0
+                    and event.error_message
+                ):
+
+                    logger.warning(
+                        (
+                            "Ignoring stale processed result "
+                            "event_id=%s retry_count=%s"
+                        ),
+                        event.id,
+                        event.retry_count,
+                    )
+
+                    sqs.delete_message(
+                        QueueUrl=queue_url,
+                        ReceiptHandle=message["ReceiptHandle"],
                     )
 
                     continue
@@ -225,17 +252,28 @@ def _process_results():
 
                     logger.warning(
                         (
-                            "Ignoring invalid "
-                            "result transition "
-                            "event_id=%s status=%s"
+                            "Ignoring invalid result transition "
+                            "event_id=%s current_status=%s incoming_status=%s"
                         ),
                         event.id,
                         event.status,
+                        status,
+                    )
+
+                    sqs.delete_message(
+                        QueueUrl=queue_url,
+                        ReceiptHandle=message["ReceiptHandle"],
                     )
 
                     continue
 
                 if status == "processed":
+
+                    logger.info(
+                        "MARK_SENT CALLED event_id=%s retry_count=%s",
+                        event.id,
+                        event.retry_count,
+                    )
 
                     event.mark_sent()
 
@@ -243,8 +281,18 @@ def _process_results():
 
                 else:
 
+                    logger.warning(
+                        (
+                            "MARK_FAILED CALLED "
+                            "event_id=%s retry_count=%s error=%s"
+                        ),
+                        event.id,
+                        event.retry_count,
+                        error,
+                    )
+
                     event.mark_failed(
-                        error or ("Unknown downstream " "processing error")
+                        error or "Unknown downstream processing error"
                     )
 
                     failed += 1
@@ -255,7 +303,7 @@ def _process_results():
             )
 
             logger.info(
-                ("Processed result " "event_id=%s status=%s"),
+                "Processed result event_id=%s status=%s",
                 event_id,
                 status,
             )
@@ -263,12 +311,12 @@ def _process_results():
         except Exception:
 
             logger.exception(
-                ("Failed to process " "results message_id=%s"),
+                "Failed to process results message_id=%s",
                 message.get("MessageId"),
             )
 
     logger.info(
-        ("Results cycle complete " "processed=%d failed=%d"),
+        "Results cycle complete processed=%d failed=%d",
         processed,
         failed,
     )
