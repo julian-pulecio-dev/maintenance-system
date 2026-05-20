@@ -13,13 +13,15 @@ class OutboxEventQuerySet(models.QuerySet):
     def pending(self):
         return self.filter(status=OutboxEvent.Status.PENDING)
 
-    def dispatchable(self):
+    def dispatchable(self, retry_cutoff=None):
+        failed_q = models.Q(
+            status=OutboxEvent.Status.FAILED,
+            retry_count__lt=OutboxEvent.MAX_RETRIES,
+        )
+        if retry_cutoff is not None:
+            failed_q &= models.Q(last_attempted_at__lt=retry_cutoff)
         return self.filter(
-            models.Q(status=OutboxEvent.Status.PENDING)
-            | models.Q(
-                status=OutboxEvent.Status.FAILED,
-                retry_count__lt=OutboxEvent.MAX_RETRIES,
-            )
+            models.Q(status=OutboxEvent.Status.PENDING) | failed_q
         )
 
     def processing(self):

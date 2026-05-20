@@ -22,6 +22,7 @@ RESULTS_INTERVAL_SECONDS = 10
 RESULTS_BATCH_SIZE = 10
 
 STUCK_THRESHOLD_MINUTES = 10
+FAILED_RETRY_DELAY_MINUTES = 5
 
 _sns_client = None
 _sqs_client = None
@@ -71,8 +72,12 @@ def _claim_pending_events():
 
     with transaction.atomic():
 
+        retry_cutoff = timezone.now() - timedelta(
+            minutes=FAILED_RETRY_DELAY_MINUTES
+        )
+
         events = list(
-            OutboxEvent.objects.dispatchable()
+            OutboxEvent.objects.dispatchable(retry_cutoff=retry_cutoff)
             .select_for_update(skip_locked=True)
             .order_by("created_at")[:BATCH_SIZE]
         )
