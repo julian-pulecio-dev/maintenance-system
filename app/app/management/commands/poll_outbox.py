@@ -7,7 +7,6 @@ from threading import Event, Thread
 import boto3
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import F
 from django.utils import timezone
 
 from outbox.models import OutboxEvent
@@ -22,7 +21,7 @@ RESULTS_INTERVAL_SECONDS = 10
 RESULTS_BATCH_SIZE = 10
 
 STUCK_THRESHOLD_MINUTES = 10
-FAILED_RETRY_DELAY_MINUTES = 5
+FAILED_RETRY_DELAY_MINUTES = 1
 
 _sns_client = None
 _sqs_client = None
@@ -50,21 +49,21 @@ def _recover_stuck_processing_events():
 
     stuck_cutoff = timezone.now() - timedelta(minutes=STUCK_THRESHOLD_MINUTES)
 
-    recovered = (
-        OutboxEvent.objects.processing()
-        .filter(last_attempted_at__lt=stuck_cutoff)
-        .update(
-            status=OutboxEvent.Status.FAILED,
-            retry_count=F("retry_count") + 1,
-            last_attempted_at=timezone.now(),
-            error_message="Recovered stuck PROCESSING event",
-        )
-    )
+    with transaction.atomic():
 
-    if recovered:
+        stuck_events = list(
+            OutboxEvent.objects.processing()
+            .filter(last_attempted_at__lt=stuck_cutoff)
+            .select_for_update(skip_locked=True)
+        )
+
+        for event in stuck_events:
+            event.mark_failed("Recovered stuck PROCESSING event")
+
+    if stuck_events:
         logger.warning(
-            ("Recovered %d stuck PROCESSING " "events"),
-            recovered,
+            "Recovered %d stuck PROCESSING events",
+            len(stuck_events),
         )
 
 

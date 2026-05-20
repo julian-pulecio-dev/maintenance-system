@@ -218,14 +218,17 @@ class OutboxEvent(models.Model):
     def mark_failed(self, error_message: str):
         self.retry_count += 1
 
+        now = timezone.now()
+        timestamp = now.strftime("%Y-%m-%d %H:%M:%SZ")
+        entry = f"[{timestamp}] {error_message or 'Unknown error'}"
+
         self.error_message = (
-            error_message[: self.MAX_ERROR_MESSAGE_LENGTH]
-            if error_message
-            else None
-        )
+            f"{self.error_message}\n{entry}"
+            if self.error_message
+            else entry
+        )[: self.MAX_ERROR_MESSAGE_LENGTH]
 
-        self.last_attempted_at = timezone.now()
-
+        self.last_attempted_at = now
         self.status = self.Status.FAILED
 
         self.save(
