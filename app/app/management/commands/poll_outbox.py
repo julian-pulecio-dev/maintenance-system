@@ -7,6 +7,7 @@ from threading import Event, Thread
 import boto3
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from outbox.models import OutboxEvent
@@ -52,9 +53,10 @@ def _recover_stuck_processing_events():
         OutboxEvent.objects.processing()
         .filter(last_attempted_at__lt=stuck_cutoff)
         .update(
-            status=OutboxEvent.Status.PENDING,
+            status=OutboxEvent.Status.FAILED,
+            retry_count=F("retry_count") + 1,
             last_attempted_at=timezone.now(),
-            error_message=("Recovered stuck PROCESSING event"),
+            error_message="Recovered stuck PROCESSING event",
         )
     )
 
